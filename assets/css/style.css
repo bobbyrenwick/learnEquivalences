@@ -1,0 +1,138 @@
+body {
+	/* Prevent the text select cursor to make text more like native labels */ 
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	cursor: default;
+}
+
+.nav-header {
+	cursor: pointer;
+}
+
+/* Node highlighting */
+.highlighted, .completed {
+	border-radius: 3px;
+}
+
+.highlighted {
+	background: #ffc40d; /* yellow from bootstrap */
+}
+
+.completed {
+	background: #46a546; /* green from bootstrap */
+}
+
+.node {
+	cursor: pointer;
+	font-size: 18px;
+}
+
+.exerciseHeader {
+	border-bottom: 1px solid #EEE;
+}
+
+.answerSection {
+	margin-top:15px;
+}
+
+.answerSection:first-child {
+	margin-top: 0;
+	margin-bottom: 15px;
+}
+
+ul.stepSet {
+	list-style: none;
+	margin: 10px 0;
+}
+
+li.answerStep {
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
+	margin: 10px 0;
+}
+
+li.answerStep small {
+	color: #999999;
+	margin-left: 10px;
+}
+
+.text-block {
+	margin-top: 5px;
+	margin-bottom: 0;
+}
+
+li.exerciseListItem {
+	line-height: 18px;
+	font-size: 14px;
+	text-rendering: optimizelegibility;
+}
+
+#exercises-view {
+	height: 650px;
+	-webkit-box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
+	   -moz-box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
+	        box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
+}
+
+.inner-padding-left {
+	padding-left: 10px;
+}
+
+#eq-rules-list-container {
+	/* This needs to be resized automatically to fill the rest of the browser 
+	   from the header downwards
+	*/
+	height: 650px;
+	overflow-y: auto;
+}
+
+.nav-header:hover {
+	color: #888;
+}
+
+label {
+	font-weight: bold;
+}
+
+.inputSetWrite, .goalSetWrite {
+	cursor: pointer;
+}
+
+.inputSetWrite i, .goalSetWrite i {
+	opacity: 0.2;
+}
+
+.inputSetWrite:hover i, .goalSetWrite:hover i {
+	opacity: 0.5;
+}
+
+.inputSetWrite span, .goalSetWrite span {
+	color: #999999;
+	display:none;
+}
+
+.inputSetWrite:hover span, .goalSetWrite:hover span {
+	display:inline-block;
+}
+
+.modal h4 {
+	margin-bottom: 15px;
+	padding-bottom: 5px;
+	border-bottom: #eee 1px solid;
+}
+
+.green {
+	color: #5BB75B;
+}
+
+.blue {
+	color: #49AFCD;
+}

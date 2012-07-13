@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+	<meta charset="utf-8">
+	<title>Equivalences Test Suite</title>
+    <link rel="stylesheet" href="qunit.css" />
+  </head>
+  <body>
+    <h1 id="qunit-header">Equivalences Testing</h1>
+    <h2 id="qunit-banner"></h2>
+    <h2 id="qunit-userAgent"></h2>
+    <ol id="qunit-tests">
+    </ol>
+    <script id="comboNodeTemplate" type="text/template">
+      <% 
+        if(left != null) {
+          var leftNotHigher = left.get("precedence") <= precedence;
+          if(leftNotHigher) print("(");
+          print("<span class=\"left\"></span>");
+          if(leftNotHigher) print(")"); 
+        }
+      %>
+      <span class="symbol"><%= symbol %></span>
+        <% 
+          if(right != null) {
+            // If binary node then brackets when rightNotHigher, with unary node, it needs to be strictly less
+            brackets = (left != null ? right.get("precedence") <= precedence : right.get("precedence") < precedence);
+            if(brackets) print("(");
+          print("<span class=\"right\"></span>");
+          if(brackets) print(")");
+        }
+      %>
+    </script>
+
+    <script id="stepSetTemplate" type="text/template">
+      <ul class="stepSet"></ul> 
+    </script>
+
+    <script id="answerStepTemplate" type="text/template">
+      <small><%= rule %></small>
+    </script>
+
+
+    <script id="equivalenceRuleTemplate" type="text/template">
+      <a href="#"><%= rule %></a>
+    </script>
+
+    <script id="newExerciseModalTemplate" type="text/template">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        <h3>Enter a new exercise</h3>
+      </div>
+      <div class="modal-body">
+        <form class="form-horizontal">
+          <fieldset>
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-close" data-dismiss="modal">Close</button>
+        <button class="btn btn-success">Start</button>
+      </div>
+    </script>
+
+    <script id="newEqRuleModalTemplate" type="text/template">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        <h3>Enter a new equivalence rule</h3>
+      </div>
+      <div class="modal-body">
+        <form class="form-horizontal">
+          <fieldset>
+          <div class="control-group">
+            <label class="control-label" for="optionsCheckboxList">Options</label>
+            <div class="controls">
+              <label class="checkbox">
+                <input type="checkbox" name="bidirectionalCheckbox" value="bidirectional" checked>
+                Bidirectional
+              </label>
+              <label class="checkbox">
+                <input type="checkbox" name="optionsCheckboxList2" value="option2">
+                Free Something or other
+              </label>
+            </div>
+          </div>
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-close" data-dismiss="modal">Close</button>
+        <button class="btn btn-success">Add</button>
+      </div>
+    </script>
+
+    <script id="eqRuleDirChooseModalTemplate" type="text/template">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        <h3>Do you want to use the rule forwards or backwards?</h3>
+      </div>
+      <div class="modal-body">
+        <form class="form-horizontal">
+          <fieldset>
+            <div class="control-group">
+              <label class="control-label" for="">Selected sub-formula</label>
+              <div class="controls">
+                <p class="rule text-block"><%= node %></p>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label" for="">Rule</label>
+              <div class="controls">
+                <p class="rule text-block"><%= rule %></p>
+                <% if (!fwdResult) { %>
+                <p class="help-block">The forwards application of this rule requires the introduction of <% if (!fwdMultipleSymbols) { print("a"); } %> formula<% if (fwdMultipleSymbols) { print("e"); } %> for the symbol<% if (fwdMultipleSymbols) { print("s"); } %>: <%= fwdIntroSymbolsCS %></p>
+                <% } %>
+                <% if (!bwdResult) { %>
+                <p class="help-block">The backwards application of this rule requires the introduction of <% if (!bwdMultipleSymbols) { print("a"); } %> formula<% if (bwdMultipleSymbols) { print("e"); } %> for the symbol<% if (bwdMultipleSymbols) { print("s"); } %>: <%= bwdIntroSymbolsCS %></p>
+                <% } %>
+              </div>
+            </div>
+
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-close" data-dismiss="modal">Close</button>
+        <button class="btn btn-success" <% if(!fwdResult) print("disabled") %>>Forwards</button>
+        <button class="btn btn-info" <% if(!bwdResult) print("disabled") %>>Backwards</button>
+      </div>
+    </script>
+
+    <script id="wffIntroModalTemplate" type="text/template">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        <h3>Please enter the wff<% if (multipleSymbols) { print("s"); } %> you would like to introduce.</h3>
+      </div>
+      <div class="modal-body">
+        <form class="form-horizontal">
+          <fieldset>
+            <div class="control-group">
+              <label class="control-label" for="">Selected sub-formula</label>
+              <div class="controls">
+                <p class="rule text-block"><%= node %></p>
+              </div>
+            </div>
+
+            <div class="control-group">
+              <label class="control-label" for="">Rule</label>
+              <div class="controls">
+                <p class="rule text-block"><%= rule %> <%= direction %></p>
+                <p class="help-block">The <%= direction %> application of this rule requires the introduction of <% if (!multipleSymbols) { print("a"); } %> formula<% if (multipleSymbols) { print("e"); } %> for the symbol<% if (multipleSymbols) { print("s"); } %>: <%= introSymbolsCS %></p>
+              </div>
+            </div>
+
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-close" data-dismiss="modal">Close</button>
+        <button class="btn btn-success" disabled>OK</button>
+      </div>
+    </script>
+
+    <script id="subFIntroFormBlockTemplate" type="text/template">
+      <label class="control-label" for="new-wff-<%= i %>"><%= label %></label>
+      <div class="controls">
+        <div class="input-append">
+          <input type="text" class="input-xlarge" id="new-wff-<%= i %>"><% if (showIntroduce) { %><button class="btn introduce-wff" type="button">Introduce</button><% } %>
+          <p class="help-block"></p>
+        </div>
+      </div>
+    </script>
+
+    <script id="wffFormBlockTemplate" type="text/template">
+      <label class="control-label" for=""><%= label %></label>
+      <div class="controls">
+        <p class="rule text-block"><%= node %></p>
+      </div>
+    </script>
+
+    <script id="writeNextStepModalTemplate" type="text/template">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        <h3>Please enter the next step you would like to add</h3>
+      </div>
+      <div class="modal-body">
+        <form class="form-horizontal">
+          <fieldset>
+            <div class="control-group">
+              <label class="control-label" for="">Last Step</label>
+              <div class="controls">
+                <p class="rule text-block"><%= lastStep %></p>
+              </div>
+            </div>
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-close" data-dismiss="modal">Close</button>
+        <button class="btn btn-success" disabled>OK</button>
+      </div>
+    </script>
+
+    <script id="connectiveToolbarTemplate" type="text/template">
+      <label class="control-label" for="">Insert symbols</label>
+      <div class="controls connective-toolbar">
+        <div class="btn-group">
+          <button class="btn not">&not;</button>
+          <button class="btn and">&and;</button>
+          <button class="btn or">&or;</button>
+          <button class="btn imply">&rarr;</button>
+          <button class="btn dimply">&harr;</button>
+          <button class="btn contradiction">&perp;</button>
+          <button class="btn tautology">&#8868;</button>
+        </div>
+        <p class="help-block">Click on a connective to insert it into the active input area immediately after the cursor.</p>
+      </div>
+    </script>
+
+    <script id="alertTemplate" type="text/template">
+      <% if (closable) { %>
+        <a class="close" data-dismiss="alert" href="#">×</a>
+      <% } %>
+      <h4 class="alert-heading"><%= heading %></h4>
+        <%= body  %>
+    </script>
+
+    <script id="exerciseTemplate" type="text/template">
+      <div class="exerciseHeader">
+        <div class="btn-group pull-right">
+          <button class="btn btn-inverse btn-undo" <% if(!undoAvailable) print("disabled"); %>><i class="icon-circle-arrow-left icon-white"></i> Undo</button>
+          <button class="btn btn-inverse btn-unstack" <% if(!unstackAvailable) print("disabled"); %>><i class="icon-remove-sign icon-white"></i> Unstack</button>
+        </div>
+        <h1>Exercise <%= no %>&nbsp;<small><%= exerciseString %></small></h1>
+      </div>
+    </script>
+
+    <script id="exerciseListItemTemplate" type="text/template">
+      <a href="#"><%= no %>)&nbsp;<%= exercise %></a>
+    </script>
+
+    <script src="../assets/js/lib/json2.js"></script>
+    <script src="../assets/js/lib/jquery-1.7.2.js"></script>
+    <script src="../assets/js/bootstrap-transition.js"></script>
+    <script src="../assets/js/bootstrap-alert.js"></script>
+    <script src="../assets/js/bootstrap-modal.js"></script>
+    <script src="../assets/js/bootstrap-dropdown.js"></script>
+    <script src="../assets/js/bootstrap-scrollspy.js"></script>
+    <script src="../assets/js/bootstrap-tab.js"></script>
+    <script src="../assets/js/bootstrap-tooltip.js"></script>
+    <script src="../assets/js/bootstrap-popover.js"></script>
+    <script src="../assets/js/bootstrap-button.js"></script>
+    <script src="../assets/js/bootstrap-collapse.js"></script>
+    <script src="../assets/js/bootstrap-carousel.js"></script>
+    <script src="../assets/js/bootstrap-typeahead.js"></script>
+    <script src="../assets/js/lib/underscore-1.3.3.js"></script>
+    <script src="../assets/js/lib/backbone-0.9.2.js"></script>
+    <script src="../assets/js/treeStructures.js"></script>
+    <script src="../assets/js/parser.js"></script>
+    <script src="../assets/js/equivalenceRules.js"></script>
+    <script src="../assets/js/modals.js"></script>
+    <script src="../assets/js/exercises.js"></script>
+	 <script src="qunit.js"></script>
+    <script>
+	$(document).ready(function() {
+		
+		
+		module('Test Parser');
+		
+		//∧ ∨ ¬ → ↔
+		// need to split this up into more tests
+		test("Parsing Sentences", function() {
+		
+		
+			var test = App.parser.parse("A∧B");
+			var testBinding = App.parser.parse("¬(A→B)∧(B→A)");
+			var testBracketing = App.parser.parse("(((¬A)→B)∧(C→D))");
+		
+			expect(3);
+			equal("A ∧ B",test.toString(),"Given A∧B expecting for the tree to have string representation: A∧B, got: " + test.toString());
+			equal("¬(A → B) ∧ (B → A)",testBinding.toString(),"Expecting for the tree to have string representation: ¬(A→B)∧(B→A), got: " + testBinding.toString());
+			equal("(¬A → B) ∧ (C → D)",testBracketing.toString(),"Expecting for the tree to have string representation: (¬A→B)∧(C→D), got: " + testBracketing.toString());
+					
+		});
+		
+		
+		module("Truth Values")
+		
+		test("Atom", function() {
+			
+			var atom = new App.Node({ symbol:"A" });
+			
+			expect(2);
+			ok(!atom.truthValue(),"Initially an atom should be false.");
+			atom.set({ truth:true });
+			ok(atom.truthValue(),"Atom's truth value should return true after setting truth");
+				
+			
+		});
+		
+		test("Constants", function() {
+			
+			var taut = new App.Tautology();
+			var cont = new App.Contradiction();
+			
+			expect(2);
+			ok(taut.truthValue(),"A tautology should be true.");
+			ok(!(cont.truthValue()),"A contradiction should be false");
+				
+			
+		});
+		
+		test("Negation", function() {
+			
+			var negation = new App.NegationNode({ right: new App.Node({ symbol:"A" })} );
+			
+			// only need to test it returns the negative of an initial node
+			expect(1);
+			ok(negation.truthValue(),"Initially a negation should be true (as a node is initially false)");
+			
+		});
+		
+		test("And", function() {
+			
+			var a = new App.Node({symbol:"A"});
+			var b = new App.Node({symbol:"B"});
+			
+			var andNode = new App.AndNode({left:a,right:b});
+			
+			// only need to test it returns the negative of an initial node
+			expect(4);
+			ok(!andNode.truthValue(),"Initially should be false");
+			a.set({truth : true});
+			ok(!andNode.truthValue(),"Should be false with A true, B false");
+			b.set({truth: true});
+			ok(andNode.truthValue(),"Should be true with A true, B true");
+			a.set({truth : false});
+			ok(!andNode.truthValue(),"Should be false with A false, B true");
+			
+			
+		});
+		
+		test("Imply", function() {
+			
+			var a = new App.Node({symbol:"A"});
+			var b = new App.Node({symbol:"B"});		
+			var implyNode = new App.ImplyNode({left:a,right:b});
+			
+			// only need to test it returns the negative of an initial node
+			expect(4);
+			ok(implyNode.truthValue(),"Initially should be true");
+			a.set({truth : true });
+			ok(!implyNode.truthValue(),"Should be false with A true, B false");
+			b.set({truth : true});
+			ok(implyNode.truthValue(),"Should be true with A true, B true");
+			a.set({truth : false});
+			ok(implyNode.truthValue(),"Should be true with A false, B true");
+			
+			
+		});
+		
+		test("Dimply", function() {
+			
+			var a = new App.Node({symbol:"A"}),
+          b = new App.Node({symbol:"B"}),
+          dimplyNode = new App.DimplyNode({left:a,right:b});
+			
+			// only need to test it returns the negative of an initial node
+			expect(4);
+			ok(dimplyNode.truthValue(),"Initially should be true");
+			a.set({truth : true});
+			ok(!dimplyNode.truthValue(),"Should be false with A true, B false");
+			b.set({truth : true});
+			ok(dimplyNode.truthValue(),"Should be true with A true, B true");
+			a.set({truth : false});
+			ok(!dimplyNode.truthValue(),"Should be false with A false, B true");
+			
+			
+		});
+
+    module("Equivalence Check And Application");
+
+    test("formulaMatchesTree", function () {
+      var a = new App.Node({ symbol:"A" }),
+          b = new App.Node({ symbol:"B" }),
+          c = new App.Node({ symbol:"C" }),
+          d = new App.Node({ symbol:"D" }),
+          taut = new App.Tautology(),
+
+          
+          dimplyNode = new App.DimplyNode({ left : a, right : b }),
+          implyNode = new App.ImplyNode({ left : a, right : b }),
+          negationNode = new App.NegationNode({ right : b }),
+          aOrTaut = new App.OrNode({
+            left : a,
+            right : taut
+          })
+          
+          abcd = new App.AndNode({
+            left : new App.AndNode({
+              left : a,
+              right : b
+            }),
+            right : new App.AndNode({
+              left : c,
+              right : d
+            })
+          }),
+
+          repeatingSymbols = new App.OrNode({
+            left : new App.AndNode({
+              left : new App.Node({ symbol : "A" }),
+              right : new App.Node({ symbol : "B" })
+            }),
+            right : new App.AndNode({
+              left : new App.Node({ symbol : "A" }),
+              right : new App.Node({ symbol : "C" })
+            })
+          }),
+
+          repeatingSymbolsCheckTrue = new App.OrNode({
+            left : new App.AndNode({
+              left : new App.Node({ symbol : "P" }),
+              right : new App.Node({ symbol : "Q" })
+            }),
+            right : new App.AndNode({
+              left : new App.Node({ symbol : "P" }),
+              right : new App.Node({ symbol : "S" })
+            })
+          }),
+
+          repeatingSymbolsCheckFail = new App.OrNode({
+            left : new App.AndNode({
+              left : new App.Node({ symbol : "P" }),
+              right : new App.Node({ symbol : "Q" })
+            }),
+            right : new App.AndNode({
+              left : new App.Node({ symbol : "T" }),
+              right : new App.Node({ symbol : "S" })
+            })
+          }),
+
+          matchingPairs = [],
+          expectPairs = [];
+
+      // Check that any formula matches tree with just symbol A
+      ok(App.EquivalenceRule.formulaMatchesTree(dimplyNode, a , matchingPairs), "Any formula should always match a rule that has just a node as its tree");
+      expectPairs = [[a, dimplyNode]];
+      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+
+      // Check that the formula matches a symbol and not just the layout
+      ok(!App.EquivalenceRule.formulaMatchesTree(dimplyNode, implyNode, matchingPairs), "A double implication should not match a single implication");
+
+      // Check that matching works for a binary node
+      matchingPairs = [];
+      ok(App.EquivalenceRule.formulaMatchesTree(implyNode, implyNode, matchingPairs), "A single implication should match a single implication");
+      expectPairs = [[a, a],[b, b]];
+      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+
+      // Check that the matching works for a unary node
+      matchingPairs = [];
+      ok(App.EquivalenceRule.formulaMatchesTree(negationNode, negationNode, matchingPairs), "");
+      expectPairs = [[b, b]];
+      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+
+      // Check that the matching works for nested nodes
+      matchingPairs = [];
+      ok(App.EquivalenceRule.formulaMatchesTree(abcd, abcd, matchingPairs), "Nested AndNodes should be equivalent");
+      expectPairs = [[a, a],[b, b],[c, c],[d, d]];
+      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+
+      // Check that the matching works for repeated symbols within the equivalence rule
+      matchingPairs = [];
+      ok(App.EquivalenceRule.formulaMatchesTree(repeatingSymbolsCheckTrue, repeatingSymbols, matchingPairs), "Repeated symbols should match");
+      expectPairs = [
+        [repeatingSymbols.get("left").get("left"), repeatingSymbolsCheckTrue.get("left").get("left")],
+        [repeatingSymbols.get("left").get("right"), repeatingSymbolsCheckTrue.get("left").get("right")],
+        [repeatingSymbols.get("right").get("right"), repeatingSymbolsCheckTrue.get("right").get("right")]
+      ];
+      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+
+      // Check that the matching works for repeated symbols with tautologies
+      matchingPairs = [];
+      ok(App.EquivalenceRule.formulaMatchesTree(aOrTaut, aOrTaut, matchingPairs), "Repeated symbols should match");
+      expectPairs = [
+        [a, a]
+      ];
+      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+    
+    });
+
+    test("replaceSubsInTree", function () {
+      var nodeReplace = new App.Node({ symbol : "A" }),
+          andReplace = new App.AndNode({
+              left : new App.Node({ symbol : "A"}),
+              right : new App.Node({ symbol : "B" })
+          }),
+          repeatingSymbolsLHS = new App.AndNode({
+            left : new App.Node({ symbol : "A" }),
+            right : new App.OrNode({
+              left : new App.Node({ symbol : "B"}),
+              right : new App.Node({ symbol : "C" })
+            })
+          }),
+          
+          p = new App.Node({ symbol:"P" }),
+          q = new App.Node({ symbol:"Q" }),
+          r = new App.Node({ symbol:"R" }),
+
+          repeatingSymbols = new App.OrNode({
+            left : new App.AndNode({
+              left : new App.Node({ symbol : "A" }),
+              right : new App.Node({ symbol : "B" })
+            }),
+            right : new App.AndNode({
+              left : new App.Node({ symbol : "A" }),
+              right : new App.Node({ symbol : "C" })
+            })
+          }),
+
+          repeatingSymbolsCheckTrue = new App.OrNode({
+            left : new App.AndNode({
+              left : new App.Node({ symbol : "P" }),
+              right : new App.Node({ symbol : "Q" })
+            }),
+            right : new App.AndNode({
+              left : new App.Node({ symbol : "P" }),
+              right : new App.Node({ symbol : "S" })
+            })
+          }),
+
+
+          nodeMatchingPairs = [
+            [new App.Node({ symbol : "A" }), p],
+          ];
+
+
+          andMatchingPairs = [
+            [new App.Node({ symbol : "A" }), p],
+            [new App.Node({ symbol : "B" }), q],
+          ];
+
+          expectPairs = [
+            [repeatingSymbols.get("left").get("left"), repeatingSymbolsCheckTrue.get("left").get("left")],
+            [repeatingSymbols.get("left").get("right"), repeatingSymbolsCheckTrue.get("left").get("right")],
+            [repeatingSymbols.get("right").get("right"), repeatingSymbolsCheckTrue.get("right").get("right")]
+          ];
+
+      // Check that any formula matches tree with just symbol A
+      nodeReplace = App.EquivalenceRule.replaceSubsInTree(nodeReplace, nodeMatchingPairs);
+      deepEqual(nodeReplace.toString(), "P");
+
+      // Check that any formula matches tree with just symbol A
+      andReplace = App.EquivalenceRule.replaceSubsInTree(andReplace, andMatchingPairs);
+      deepEqual(andReplace.toString(), "P ∧ Q");
+
+    
+      repeatingSymbolsLHS = App.EquivalenceRule.replaceSubsInTree(repeatingSymbolsLHS, expectPairs)
+      deepEqual(repeatingSymbolsLHS.toString(), "P ∧ (Q ∨ S)")
+    
+    });
+
+    module("Equivalence Rules");
+
+    App.equivalenceRules.each(function (eqRule) {
+      test(eqRule.get("rule"), function () {
+
+        var matchingPairs = [],
+            ruleArr = eqRule.get("rule").split("≡"),
+            leftWff = App.parser.parse(ruleArr[0]),
+            rightWff = App.parser.parse(ruleArr[1]);
+
+        ok(App.EquivalenceRule.formulaMatchesTree(leftWff, eqRule.get("lhsTrees")[0], matchingPairs), eqRule.get("rule") + " passes tree test when supplied with identical wff forwards");
+        matchingPairs = [];
+        ok(App.EquivalenceRule.formulaMatchesTree(rightWff, eqRule.get("rhsTrees")[0], matchingPairs), eqRule.get("rule") + " passes tree test when supplied with identical wff backwards");
+
+
+        // Test the isApplicable function
+        _.each(eqRule.get("lhsTrees"), function(tree) {
+          ok(eqRule.isApplicable(1, tree), tree.toString() + " is applicable forwards to " + eqRule.get("rule"))
+        });
+
+        _.each(eqRule.get("rhsTrees"), function(tree) {
+          ok(eqRule.isApplicable(-1, tree), tree.toString() + " is applicable backwards to " + eqRule.get("rule"))
+        });
+
+      })
+    })
+		
+		module("Equivalence Check");
+		
+		test("getAtoms", function() {
+			var a = new App.Node({ symbol:"A" });
+			var anothera = new App.Node({ symbol:"A" });
+			
+			var b = new App.Node({ symbol:"B" });
+			var nota = new App.NegationNode({ right: a })
+			var aandb = new App.AndNode({ left: a, right: b});
+			
+			var aAtoms = [];
+			a.getAtoms(aAtoms);
+			var aAtomsExp = [{ "symbol": "A", "objects" : [ a ] }];
+			
+			var notaAtoms = [];
+			nota.getAtoms(notaAtoms);
+			
+			var aandbAtoms = [];
+			aandb.getAtoms(aandbAtoms);
+			var aandbExp = [ 
+				{ symbol: "A", objects : [a] }, 
+				{ symbol: "B", objects : [b] }
+			];
+			
+			var abImplyAnotherA = new App.ImplyNode({left: aandb, right: anothera});
+			var abImplyAnotherAAtoms = [];
+			abImplyAnotherA.getAtoms(abImplyAnotherAAtoms);
+			
+			var abImplyAnotherAExp = [ 
+				{ symbol: "A", objects : [a,anothera] }, 
+				{ symbol: "B", objects : [b] }
+			]
+			
+			
+			expect(7);
+			//want to make sure that it is checking they are the same thing in memory
+			deepEqual(aAtoms,aAtomsExp, "Testing atom: " + a.toString());
+			equal(aAtoms[0]["objects"][0], a, "Testing that the object in test above refers to same object");
+			
+			notEqual(aAtoms[0]["objects"][0], anothera, "Testing that the object in test above refers to same object");
+			
+			deepEqual(notaAtoms,aAtomsExp, "Testing atoms of " + nota.toString());
+			equal(notaAtoms[0]["objects"][0], a, "Testing that the object in test above refers to same object");
+			
+			deepEqual(aandbAtoms,aandbExp, "Testing atoms of " + aandb.toString());
+			
+			deepEqual(abImplyAnotherAAtoms,abImplyAnotherAExp, "Testing atoms of " + abImplyAnotherA.toString());
+		});
+
+
+		test("assignTruthValues", function() {
+
+			var a = new App.Node({ symbol:"A" }),
+				a2 = new App.Node({ symbol:"A" }),
+				b = new App.Node({ symbol:"B" }),
+				c = new App.Node({ symbol:"C" }),
+
+				abc = [ 
+						{ symbol: "A", objects : [a,a2] }, 
+						{ symbol: "B", objects : [b] },
+						{ symbol: "C", objects : [c] }
+				],
+				equivalenceChecker = new App.EquivalenceChecker();
+	
+			ok(!a.get("truth"),"Check initially all false");
+			ok(!a2.get("truth"),"Check initially all false");
+			ok(!b.get("truth"),"Check initially all false");
+			ok(!c.get("truth"),"Check initially all false");
+
+			equivalenceChecker.assignTruthValues("100",abc);
+			ok(a.get("truth"),"Check a true");
+			ok(a2.get("truth"),"Check a2 true");
+			ok(!b.get("truth"),"Check b still false");
+			ok(!c.get("truth"),"Check c still false");
+
+			equivalenceChecker.assignTruthValues("011",abc);
+			ok(!a.get("truth"),"Check a back to false");
+			ok(!a2.get("truth"),"Check a2 back false");
+			ok(b.get("truth"),"Check b now true");
+			ok(c.get("truth"),"Check c now true");
+
+			equivalenceChecker.assignTruthValues("000",abc);
+			ok(!a.get("truth"),"Check all false");
+			ok(!a2.get("truth"),"Check all false");
+			ok(!b.get("truth"),"Check all false");
+			ok(!c.get("truth"),"Check all false");
+
+			equivalenceChecker.assignTruthValues("111",abc);
+			ok(a.get("truth"),"Check a true");
+			ok(a2.get("truth"),"Check a2 true");
+			ok(b.get("truth"),"Check b true");
+			ok(c.get("truth"),"Check c true");
+			
+		});
+		
+		
+		test("testEquivalence", function() {
+			var equivalenceChecker = new App.EquivalenceChecker();
+			/*
+			_.each(equivalences, function(equiv) {
+					// firstly test that all of the equivalence rules come through as equivalent
+					ok(equivalenceChecker.testEquivalence(equiv.forwardsSuccessWff,equiv.forwardsSuccessExp),"Equivalence check of: " + equiv.test);
+			});
+			*/
+			
+			var equiv1 = new App.AndNode({
+				left: new App.AndNode({
+					left: new App.Node({ symbol:"A" }),
+					right: new App.OrNode({
+						left: new App.Node({ symbol:"A" }),
+						right: new App.Node({ symbol:"B" })
+					})
+				}),
+				right: new App.OrNode({
+					left: new App.Node({ symbol:"C" }),
+					right: new App.NegationNode({ right: new App.Node({ symbol:"C" }) })
+				})
+			});
+			
+			var equiv2 = new App.AndNode({
+				left: new App.Node({ symbol:"A" }),
+				right: new App.OrNode({
+					left: new App.Node({ symbol:"D" }),
+					right: new App.NegationNode({ right: new App.Node({ symbol:"D" }) })
+				})
+			});
+
+			var equiv3 = new App.AndNode({
+				left: new App.Node({ symbol:"A" }),
+				right: new App.OrNode({
+					left: new App.Node({ symbol:"D" }),
+					right: new App.Node({ symbol:"D" })
+				})
+			})
+
+			// next test some failure cases
+			ok(equivalenceChecker.testEquivalence(equiv1,equiv2), "Testing that " + equiv1.toString() + " and " + equiv2.toString() + " are equivalent.");
+			ok(!(equivalenceChecker.testEquivalence(equiv1,equiv3)), "Testing that " + equiv1.toString() + " and " + equiv3.toString() + " are not equivalent.");
+
+			ok(!(equivalenceChecker.testEquivalence(new App.Node({ symbol:"A" }),new App.Node({ symbol:"B" }))),"Testing that A is not equivalent to B");
+		});
+
+		module("Type in Equivalence");
+
+		test("getSubFormulae", function() {
+			var a = new App.Node({ symbol:"A" }),
+				aSubs = [],
+				aSubsExp = [a],
+
+				nota = new App.NegationNode({ right: a }),
+				notaSubs = [],
+				notaSubsExp = [nota, a],
+
+				taut = new App.Tautology(),
+				tautSubs = [],
+				tautSubsExp = [taut],
+
+				cont = new App.Contradiction(),
+				contSubs = [],
+				contSubsExp = [cont],
+
+				b = new App.Node({ symbol: "B" }),
+				aandb = new App.AndNode({
+					left : a,
+					right : b
+				}),
+				aandbSubs = [],
+				aandbSubsExp = [a,aandb,b],
+
+				c = new App.Node({ symbol : "C" }),
+				d = new App.Node({ symbol : "D" }),
+
+				candd = new App.AndNode({
+					left: c,
+					right: d
+				}),
+
+				aandbimplycandd = new App.ImplyNode({
+					left: aandb,
+					right: candd
+				}),
+				aandbimplycanddSubs = [],
+				aandbimplycanddSubsExp = [a,aandb,b,aandbimplycandd,c,candd,d];
+
+			
+			a.getSubFormulae(aSubs);
+			nota.getSubFormulae(notaSubs);
+			taut.getSubFormulae(tautSubs);
+			cont.getSubFormulae(contSubs);
+			aandb.getSubFormulae(aandbSubs);
+			aandbimplycandd.getSubFormulae(aandbimplycanddSubs);
+
+
+			expect(6);
+			//want to make sure that it is checking they are the same thing in memory
+			deepEqual(aSubs,aSubsExp, "Testing atom: " + a.toString());
+			deepEqual(notaSubs,notaSubsExp, "Testing negation: " + nota.toString());
+			deepEqual(tautSubs,tautSubsExp, "Testing tautology: " + taut.toString());
+			deepEqual(contSubs,contSubsExp, "Testing contradiction: " + cont.toString());
+			deepEqual(aandbSubs,aandbSubsExp, "Testing and node: " + aandb.toString());
+			deepEqual(aandbimplycanddSubs,aandbimplycanddSubsExp, "Testing nested binary nodes: " + aandbimplycandd.toString());
+		});
+
+    
+		test("findEqRuleApplied", function() {
+      var eqRuleApplied;
+
+      App.equivalenceRules.each(function (eqRule) {
+
+        _.each(eqRule.get("lhsTrees"), function (lhsTree) {
+          // test all those on the lhs against the first wff on the right
+          _.each(eqRule.get("rhsTrees"), function (rhsTree){ 
+            eqRuleApplied = App.EquivalenceRule.findEqRuleApplied(lhsTree, rhsTree);
+            eqRuleApplied.rule = eqRuleApplied.rule.get("rule"); // Convert the rule to a string
+            deepEqual(eqRuleApplied, { rule : eqRule.get("rule"), direction : 1 }, eqRule.get("rule") + " " + (eqRuleApplied.direction > 0 ? "forwards" : "backwards") + " found when given: " + lhsTree.toString() + " to " + rhsTree.toString());
+          });
+        });
+
+        if (eqRule.get("bidirectional")) {
+
+          _.each(eqRule.get("rhsTrees"), function (rhsTree) {
+            // test all those on the rhs against the first wff on the right
+            _.each(eqRule.get("lhsTrees"), function (lhsTree){ 
+              eqRuleApplied = App.EquivalenceRule.findEqRuleApplied(rhsTree, lhsTree);
+              eqRuleApplied.rule = eqRuleApplied.rule.get("rule"); // Convert the rule to a string
+              deepEqual(eqRuleApplied, { rule : eqRule.get("rule"), direction : -1 }, eqRule.get("rule") + " " + (eqRuleApplied.direction > 0 ? "forwards" : "backwards") + " found when given: " + rhsTree.toString() + " to " + lhsTree.toString());
+            });
+          });
+        
+        }
+      
+      });
+		});
+    
+    }); //end of on ready
+    </script>
+    <div id="qunit-fixture">
+	    <div id="new-exercise-modal" class="modal hide fade"></div>
+	    <div id="eq-rule-dir-choose-modal" class="modal hide fade"></div>
+	    <div id="wff-intro-modal" class="modal hide fade"></div>
+	</div>
+  </body>
+</html>
