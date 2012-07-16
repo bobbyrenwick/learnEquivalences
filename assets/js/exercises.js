@@ -1,7 +1,13 @@
 var App = App || {};
 
 // Each Step holds any type of node
-App.Step = Backbone.Model.extend({});
+App.Step = Backbone.Model.extend({
+	toJSON : function () {
+		var json = _.clone(this.attributes);
+		json.node = json.node.toString();
+		return json;
+	}
+});
 
 // Each Step is represented as a list item in HTML, acts as a container for the
 // mess of spans created by rendering the AnswerNodeViews
@@ -54,9 +60,9 @@ App.StepsView = Backbone.View.extend({
 	template: _.template($("#stepSetTemplate").html()),
 
 	initialize: function () {
-		this.collection.bind("reset", this.render, this);
-		this.collection.bind("add", this.render, this);
-		this.collection.bind("remove", this.render, this);
+		this.collection.on("reset", this.render, this);
+		this.collection.on("add", this.render, this);
+		this.collection.on("remove", this.render, this);
 
 		// Used for determining whether to app/pre-pend the steps
 		// i.e working backwards from the goal will stack upwards,
@@ -186,7 +192,7 @@ App.AlertView = Backbone.View.extend({
 
 // Holds 2 Steps collections
 App.Exercise = Backbone.Model.extend({
-	url : "exercise",
+	url : "api/exercise",
 
 	defaults: {
 		current: false,
@@ -205,12 +211,14 @@ App.Exercise = Backbone.Model.extend({
 		// when node/step/steps is updated - cannot use global change event as this includes other attrs.
 		this.on("change:currentlySelectedEqRule changeCurrentlySelectedNodeEtc", this.onChangeSelections, this);
 
-		this.set({
-			// The equivalence that is to be proved with an equivalence sign in the middle
-			exerciseString : this.get("inputSet").at(0).get("node").toString() + " \u2261 " + this.get("goalSet").at(0).get("node").toString(),
-			// An array that holds references to the steps that were added to - in order to allow for undoing
-			undoArray : []
-		});
+		if (this.get("exerciseString") === undefined && this.get("undoArray") === undefined) {
+			this.set({
+				// The equivalence that is to be proved with an equivalence sign in the middle
+				exerciseString : this.get("inputSet").at(0).get("node").toString() + " \u2261 " + this.get("goalSet").at(0).get("node").toString(),
+				// An array that holds references to the steps that were added to - in order to allow for undoing
+				undoArray : []
+			});
+		}
 	},
 
 	onChangeSelections: function () {
@@ -353,6 +361,7 @@ App.Exercise = Backbone.Model.extend({
 		});
 		// Add the steps to the undoArray
 		this.addToUndo(steps);
+		//this.save();
 	},
 
 	createWffIntroModalView : function (node, step, eqRule, matchingPairs, direction) {
@@ -436,6 +445,40 @@ App.Exercise = Backbone.Model.extend({
 			}
 			this.deselectEqRuleAndNode();
 		}
+	},
+
+	toJSON : function () {
+		var json = _.clone(this.attributes);
+		json.goalSet = json.goalSet.toJSON();
+		json.inputSet = json.inputSet.toJSON();
+		json.current = false;
+		json.currentlySelectedSteps = false;
+		json.currentlySelectedStep = false;
+		json.currentlySelectedNode = false;
+		json.currentlySelectedEqRule = false;
+		return json;
+	},
+
+	parse : function (response) {
+		return App.Exercise.parse(response);
+	}
+}, {
+
+	parse : function (exJSON) {
+		exJSON.inputSet = new App.Steps(
+			_.map(exJSON.inputSet, function (step) {
+				step.node = App.parser.parse(step.node);
+				return new App.Step(step);
+			})
+		);
+		exJSON.goalSet = new App.Steps(
+			_.map(exJSON.goalSet, function (step) {
+				step.node = App.parser.parse(step.node);
+				return new App.Step(step);
+			})
+		);
+
+		return exJSON;
 	}
 });
 
@@ -715,7 +758,7 @@ App.ExercisesListView = Backbone.View.extend({
 		this.$el.empty();
 		this.render();
 
-		if (this.collection.length === 1) {
+		if (this.currentExercise === false) {
 			// If this is the first exercise that has been added, then render it to 
 			// the screen
 			var newExercise = this.collection.last(),
@@ -756,7 +799,8 @@ App.ExerciseManager = Backbone.Model.extend({
 	},
 
 	initialize: function () {
-		// do nothing for now
+		App.vent.on("userLoggedIn", this.onUserLoggedIn, this);
+		App.vent.on("userLoggingOut", this.onUserLoggingOut, this);
 	},
 
 	getNewExercise: function () {
@@ -765,6 +809,7 @@ App.ExerciseManager = Backbone.Model.extend({
 	},
 
 	addNewExercise: function (newExStartWff, newExFinishWff) {
+		// TODO: Herein lies the issue.
 		this.get("exercises").add({
 			inputSet: new App.Steps([{
 				node: newExStartWff,
@@ -779,9 +824,48 @@ App.ExerciseManager = Backbone.Model.extend({
 			no: this.get("exerciseNumber")
 		});
 
-		this.get("exercises").last().save();
-
 		// Add one to the exercise number ready for the next task
 		this.set("exerciseNumber", this.get("exerciseNumber") + 1);
+	},
+
+	onUserLoggedIn : function () {
+		var self = this,
+			unsavedEqRules = this.get("exercises").rest(35);
+
+		// Save all the exercises done before the login to the user
+		// To add them to the user that logged in
+		this.get("exercises").each( function(ex) {
+			ex.save();
+		});
+
+		$.ajax({
+			
+			url : 'api/userExercises',
+			type : "GET",
+			contentType : "application/json",
+			dataType : "json",
+
+			processData : false,
+
+			success : function (data) {
+				if (!data.error) {
+					_.each(data.exercises, function (ex) {
+						ex = App.Exercise.parse(ex);
+					});
+
+					self.get("exercises").add(data.exercises);
+				} else {
+					console.log("Error: " + data.error);
+				}
+			},
+
+			failure : function (data) {
+				console.log("Error: " + data.error);
+			}
+		});
+	},
+
+	onUserLoggingOut : function () {
+
 	}
 });

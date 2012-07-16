@@ -25,14 +25,6 @@ App.exerciseManager = new App.ExerciseManager({
 	exercises: new App.Exercises()
 });
 
-Backbone.View.prototype.close = function () {
-	if (this.onClose) {
-		this.onClose();
-	}
-	this.remove();
-	this.unbind();
-};
-
 App.init = function () {
 
 	// Ensures that the first input box is focused when the new exercise modal is shown
@@ -60,10 +52,21 @@ App.init = function () {
 			el: document.getElementById("exercisesListView")
 	});
 
+	// Create a singleton UserManager
+	// Must be after the eqRulesView and ExercisesView have been created
+	// So that if a user has a session then those can recieve the event
+	// To tell them that the user is logged in. 
+	App.userManagerView = new App.UserManagerView({
+		el : document.getElementById("userManagerView"),
+		model : new App.UserManager()
+	});
+
 	eqRulesView.render();
 
 	// Ask the user for an exercise
-	App.exerciseManager.getNewExercise();
+	//App.exerciseManager.getNewExercise();
+
+
 
 	/* TODO: Work out if this is necessary */
 	Backbone.history.start({

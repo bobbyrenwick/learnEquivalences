@@ -1,5 +1,13 @@
 var App = App || {};
 
+Backbone.View.prototype.close = function () {
+	if (this.onClose) {
+		this.onClose();
+	}
+	this.remove();
+	this.unbind();
+};
+
 App.ModalView = Backbone.View.extend({
 
 	// Inserts connective into the last selected text input after the position
@@ -49,8 +57,8 @@ App.InExerciseModalView = App.ModalView.extend({
 			// For each symbol that needs to be replaced by a subF, create a form
 			// element that allows for clicking
 			var prevNo = options.prevNo || 0,
-				subFIntroFormBlock = new SubFIntroFormBlockView({
-					model: new SubFIntroFormBlock({
+				subFIntroFormBlock = new App.SubFIntroFormBlockView({
+					model: new App.SubFIntroFormBlock({
 						showIntroduce: options.showIntroduce,
 						collapseWhenDone: options.collapseWhenDone,
 						// If the label is Formula to replace 
@@ -352,8 +360,7 @@ App.NewEqRuleModalView = App.ModalView.extend({
 		if (this.model.get("lhsWff") !== undefined && this.model.get("rhsWff") !== undefined && this.$(".error").length === 0) {
 			// Check the equivalence and if they're equivalent, add the exercise
 			if (this.equivalenceChecker.testEquivalence(this.model.get("lhsWff"), this.model.get("rhsWff"))) {
-				debugger;
-				this.model.get("collection").add({
+				this.model.get("collection").create({
 					category: "User Equivalences",
 					lhsTrees: [this.model.get("lhsWff")],
 					rhsTrees: [this.model.get("rhsWff")],
@@ -910,4 +917,184 @@ App.EquivalenceChecker = Backbone.Model.extend({
 			});
 		});
 	}
+});
+
+/* User registration modal dialog */
+
+App.UserRegistrationView = Backbone.View.extend({
+	events : {
+		"click .btn-close": "removeValsAndErrors",
+		"click .close": "removeValsAndErrors",
+		"focus #registerPassword" : "showPasswordConfirm",
+		"blur #registerUsername" : "checkUsername",
+		"click #registerUserAvailBtn" : "checkUsername",
+		"click .btn-primary" : "onRegisterClick"
+	},
+
+	initialize : function () {
+		// Cache the a jQuery ref to the divs containing the inputs
+		this.$username = this.$(".control-group").eq(0);
+		this.$password = this.$(".control-group").eq(1);
+		this.$passwordConf = this.$(".control-group").eq(2);
+
+		this.ajaxPending = false;
+		this.registerIsWaiting = false;
+	},
+
+	render : function () {
+		this.$el.modal({
+			backdrop: "static",
+			keyboard: false
+		});
+
+		// In case the modal has already been shown
+		this.hidePasswordConfirm();
+		return this;
+	},
+
+	checkUsername : function () {
+		var self = this,
+			username = this.$("#registerUsername").val();
+		
+		this.removeMsg(this.$username);
+
+		if (username.length >0) { // Check that the username isn't already taken
+			this.ajaxPending = true;
+			$.get('api/usernameTaken/' + username , function(data) {
+				self.ajaxPending = false;
+				if (data.error) { // Either DB conn error/username taken
+					if (self.registerIsWaiting) {
+						$(".btn-primary").removeAttr("disabled"); // re-enable the register button.
+					}
+					self.displayMsg(self.$username, true, data.error);
+				} else {
+					if (self.registerIsWaiting) { // Then the register button had been clicked between request response.
+						self.addUserToDb();
+					} else {
+						self.displayMsg(self.$username, false,"This username is available.");
+					}
+				}
+			}, "json");
+		} else { // The field is empty, prompt for input
+			this.displayMsg(this.$username, true, "Please enter a username.");
+		}
+	},
+
+	checkPassword : function () {
+		var passVal = this.$("#registerPassword").val();
+
+		this.removeMsg(this.$password);
+		
+		if (passVal.length === 0) {
+			this.displayMsg(this.$password, true, "Please enter a password");
+		}
+	},
+
+	checkPasswords : function () {
+		var passVal = this.$("#registerPassword").val(),
+			passConfVal = this.$("#registerPasswordConf").val(),
+			$bothPasswords = this.$password.add(this.$passwordConf);
+
+		this.removeMsg($bothPasswords);
+
+		if (passVal.length === 0) {
+			this.displayMsg(this.$password, true, "Please enter a password");
+		} else if (passConfVal.length === 0) {
+			this.displayMsg(this.$passwordConf, true, "Please confirm your password");
+		} else if (passVal !== passConfVal) {
+			this.displayMsg($bothPasswords, true, "The passwords are not the same");
+		}	
+	},
+
+	showPasswordConfirm : function () {
+		this.$passwordConf.slideDown().removeClass("hide");
+	},
+
+	hidePasswordConfirm : function () {
+		this.$passwordConf.hide();
+	},
+
+	removeValsAndErrors : function () {
+		this.$("input").val(""); // Remove all the values from the inputs
+		this.removeMsg($(".control-group")); // Remove all errors
+		this.$("span").remove(); // Remove the message to tell the user we're waiting on the db
+		this.$(".btn-primary").removeAttr("disabled"); // Re-enable the register button.
+	},
+
+	onRegisterClick : function (e) {
+		e.stopPropagation();
+		e.preventDefault();
+
+		this.checkPasswords();
+		
+		if (!this.$username.hasClass("success") && !this.$username.hasClass("error")) { // Then the username hasn't been checked
+			this.checkUsername();
+		} else if (this.ajaxPending) { // Then we are currently waiting to find out if the username is available.
+			$(e.target).attr("disabled", "disabled"); // disable the register button.
+			this.registerIsWaiting = true; 
+			if (this.$(".modal-footer").find("span").length === 0) { // If there isn't a sign to tell the user to wait then make one
+				this.$(".modal-footer").prepend("<span class=\"pull-left\">Please wait while we check if the username is available.</span>");
+			}
+		} else if (this.$(".error").length === 0) { // Then the username and password are fine, proceed.
+			$(e.target).attr("disabled", "disabled");  // Disable the register button.
+			this.addUserToDb();
+		}
+	},
+
+	addUserToDb : function () {
+
+		var self = this;
+		// Do a little clean up.
+		this.registerIsWaiting = false;
+
+		$.ajax({	
+			url : 'api/addUsername',
+			type : "POST",
+
+			data : JSON.stringify({
+				"username" : this.$("#registerUsername").val(),
+				"password" : this.$("#registerPassword").val()
+			}),
+
+			contentType : "application/json",
+
+			dataType : "json",
+
+			processData : false,
+
+			success : function (data) {
+				var username = self.$("#registerUsername").val();
+
+				if (data.error) {
+					// Display an error to the user to tell them that it failed.
+					self.$(".modal-footer").prepend("<span class=\"pull-left\">" + data.error + "</span>");
+					self.$(".btn-primary").removeAttr("disabled"); // Re-enable the register button.
+				} else {
+					// The user has been added to the database.
+					self.removeValsAndErrors();
+					// Log the user in
+					App.vent.trigger("userRegistered", username); // The UserManager is bound to this event. It basically signs them in.
+					self.$el.modal("hide");
+				}
+			},
+
+			failure : function (data) {
+				// Display an error to the user to tell user it failed.
+				self.$(".modal-footer").prepend("<span class=\"pull-left\">UH OH! We hit a problem. Please try again later.</span>");
+				self.$(".btn-primary").removeAttr("disabled"); // Re-enable the register button.
+			}
+		});
+	},
+
+	displayMsg : function ($inputGroup, isError, msg) {
+		$inputGroup.addClass((isError ? "error" : "success")).find("p").text(msg);
+	},
+
+	removeMsg : function ($inputGroup) {
+		$inputGroup.removeClass("error success").find("p").text("")
+	}
+});
+
+App.userRegistrationView = new App.UserRegistrationView({
+	el: document.getElementById("newUserModal")
 });

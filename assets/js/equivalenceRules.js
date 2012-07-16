@@ -5,15 +5,22 @@ App.EquivalenceRule = Backbone.Model.extend({
 		active: false
 	},
 
-	initialize: function () {
-		var introSymbols = App.EquivalenceRule.getIntroSymbols(this.get("lhsTrees")[0], this.get("rhsTrees")[0]);
-		// Create the list of introSymbols 
-		this.set({
-			fwdIntroSymbols: introSymbols[0],
-			bwdIntroSymbols: introSymbols[1]
-		});
+	url : "api/eqRule",
 
-		if (this.get("category")[0] === "U") { // Then we are dealing with a user defined eqRule
+	// MongoDB's idAttribute is _id
+	idAttribute: "_id",
+
+	initialize: function () {
+		if (this.get("fwdIntroSymbols") === undefined) {
+			var introSymbols = App.EquivalenceRule.getIntroSymbols(this.get("lhsTrees")[0], this.get("rhsTrees")[0]);
+			// Create the list of introSymbols 
+			this.set({
+				fwdIntroSymbols: introSymbols[0],
+				bwdIntroSymbols: introSymbols[1]
+			});
+		}
+
+		if (this.get("category")[0] === "U" && this.get("username") === undefined) { // Then we are dealing with a user defined eqRule that hasn't been saved
 			// Set the textual representation of the new rule
 			this.set({
 				rule: this.get("lhsTrees")[0].toString() + " ≡ " + this.get("rhsTrees")[0].toString(),
@@ -120,10 +127,30 @@ App.EquivalenceRule = Backbone.Model.extend({
 			subToReplaceWith = App.EquivalenceRule.replaceSubsInTree(tree, matchingPairs);
 
 		return whole.deepCloneReplace(subToReplace, subToReplaceWith);
-	}
+	},
 
+	// Override so that the lhs and rhsTrees are saved as strings on the database.
+	toJSON : function () {
+		var json = _.clone(this.attributes);
+
+		json.lhsTrees = _.map(json.lhsTrees, function(t) { return t.toString(); });
+		json.rhsTrees = _.map(json.rhsTrees, function(t) { return t.toString(); });
+		return json;
+	},
+
+	parse : function (response) {
+		return App.EquivalenceRule.parse(response);
+	}
+	
 }, {
 
+	parse : function (eqRuleJSON) {
+		eqRuleJSON.lhsTrees = _.map(eqRuleJSON.lhsTrees, function (t) { return App.parser.parse(t); });
+		eqRuleJSON.rhsTrees = _.map(eqRuleJSON.rhsTrees, function (t) { return App.parser.parse(t); });
+		return eqRuleJSON;				
+	},
+
+	
 	// formula - contains the formula currently being matched
 	// tree - the tree representation of the eq rule that is being matched against
 	// matchingPairs - [rule symbol, sub-formula] pairs that have been matched so far
@@ -364,19 +391,30 @@ App.EquivalenceRulesView = Backbone.View.extend({
 
 	initialize: function () {
 		this.collection.on("add", this.renderEqRule, this);
+		this.collection.on("remove", this.removeEqRule, this);
+
+		// Bind to Users Logging In
+		App.vent.bind("userLoggedIn", this.onUserLoggedIn, this);
+
+		// Bind to users about to log out - save all eq rules.
+		App.vent.bind("userLoggingOut", this.onUserLoggingOut, this);
+
+		// An array to hold EquivalenceRuleViews
+		this.eqRuleViews = [];
 	},
 
 	render: function () {
-		this.collection.each(this.renderEqRule, this)
+		this.collection.each(this.renderEqRule, this);
 		return this;
 	},
 
 	createNewEqRuleModal: function () {
-		newEqRuleView = new App.NewEqRuleModalView({
+		var newEqRuleView = new App.NewEqRuleModalView({
 			model: new App.NewEqRuleModal({
 				"collection": this.collection
 			})
 		});
+
 		newEqRuleView.render();
 	},
 
@@ -404,7 +442,65 @@ App.EquivalenceRulesView = Backbone.View.extend({
 			this.$("li.nav-header").eq(2).before(view.render().el);
 		}
 
+		this.eqRuleViews.push(view);
+	},
 
+	onUserLoggedIn : function () {
+		var self = this,
+			unsavedEqRules = this.collection.rest(35);
+
+		// Save all eq rules that were addded before login to this new user.
+		_.each(unsavedEqRules, function(eqRule) {
+			eqRule.save();
+		})
+
+		$.ajax({
+			
+			url : 'api/userEqRules',
+			type : "GET",
+			contentType : "application/json",
+			dataType : "json",
+
+			processData : false,
+
+			success : function (data) {
+				if (!data.error) {
+
+					_.each(data.eqRules, function (eqRule) {
+						eqRule = App.EquivalenceRule.parse(eqRule);
+					});
+					self.collection.add(data.eqRules);
+				} else {
+					console.log("Error: " + data.error);
+				}
+			},
+
+			failure : function (data) {
+				console.log("Error: " + data.error);
+			}
+		});
+	},
+
+	onUserLoggingOut : function () {
+		// Remove all eqRules from this.collection past the default rules
+		this.collection.remove(this.collection.rest(35));
+	},
+
+	removeEqRule : function (eqRule) {
+		// As only ever used to remove user eqs, reduce the search size.
+		var userEqRuleViews = _.rest(this.eqRuleViews,35),
+			noUserEqRuleViews = userEqRuleViews.length,
+			i;
+
+		for (i = 0; i < noUserEqRuleViews; i++) {
+			if (userEqRuleViews[i].model === eqRule) {
+				userEqRuleViews[i].remove(); // Remove the userEqRule from the DOM
+				this.eqRuleViews.splice(35 + i ,1) // Remove the userEqRule from the array
+				if (userEqRuleViews.length === 1) { // Then we are removing the last user eqRule, so remove the header too.
+					this.$(".nav-header").eq(1).remove();
+				}
+			}
+		}
 	}
 });
 

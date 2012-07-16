@@ -2,11 +2,12 @@
 /**
  * Slim - a micro PHP 5 framework
  *
- * @author      Josh Lockhart <info@joshlockhart.com>
+ * @author      Josh Lockhart <info@slimframework.com>
  * @copyright   2011 Josh Lockhart
  * @link        http://www.slimframework.com
  * @license     http://www.slimframework.com/license
- * @version     1.5.0
+ * @version     1.6.4
+ * @package     Slim
  *
  * MIT LICENSE
  *
@@ -40,10 +41,14 @@
  * `return` the final template output. Do not `echo` the output.
  *
  * @package Slim
- * @author  Josh Lockhart <info@joshlockhart.com>
- * @since   Version 1.0
+ * @author  Josh Lockhart
+ * @since   1.0.0
  */
 class Slim_View {
+    /**
+     * @var string Absolute template path
+     */
+    protected $templatePath = '';
 
     /**
      * @var array Key-value array of data available to the template
@@ -107,10 +112,14 @@ class Slim_View {
 
     /**
      * Append data to existing View data
-     * @param   array $data
+     * @param   mixed $data
      * @return  void
+     * @throws  InvalidArgumentException
      */
-    public function appendData( array $data ) {
+    public function appendData( $data ) {
+        if ( !is_array($data) ) {
+            throw new InvalidArgumentException('Cannot append View data, array required');
+        }
         $this->data = array_merge($this->data, $data);
     }
 
@@ -129,10 +138,20 @@ class Slim_View {
      * @throws  RuntimeException If directory is not a directory or does not exist
      */
     public function setTemplatesDirectory( $dir ) {
-        if ( !is_dir($dir) ) {
-            throw new RuntimeException('Cannot set View templates directory to: ' . $dir . '. Directory does not exist.');
-        }
         $this->templatesDirectory = rtrim($dir, '/');
+    }
+
+    /**
+     * Set template
+     * @param   string $template
+     * @return  void
+     * @throws  RuntimeException If template file does not exist
+     */
+    public function setTemplate( $template ) {
+        $this->templatePath = $this->getTemplatesDirectory() . '/' . ltrim($template, '/');
+        if ( !file_exists($this->templatePath) ) {
+            throw new RuntimeException('View cannot render template `' . $this->templatePath . '`. Template does not exist.');
+        }
     }
 
     /**
@@ -142,26 +161,38 @@ class Slim_View {
      *
      * @param   string $template Path to template file relative to templates directoy
      * @return  void
+     * @throws  RuntimeException    If template does not exist
      */
     public function display( $template ) {
-        echo $this->render($template);
+        echo $this->fetch($template);
+    }
+
+    /**
+     * Fetch rendered template
+     *
+     * This method return the rendered template as a string
+     *
+     * @param   string $template Path to template file relative to templates directoy
+     * @return  void
+     */
+    public function fetch( $template ) {
+        return $this->render($template);
     }
 
     /**
      * Render template
-     * @param   string $template    Path to template file relative to templates directory
-     * @return  string              Rendered template
-     * @throws  RuntimeException    If template does not exist
+     * @return  string  Rendered template
+     *
+     * DEPRECATION WARNING!
+     *
+     * This method will be made PROTECTED in a future version. Please use `Slim_View::fetch` to
+     * return a rendered template instead of `Slim_View::render`.
      */
     public function render( $template ) {
+        $this->setTemplate($template);
         extract($this->data);
-        $templatePath = $this->getTemplatesDirectory() . '/' . ltrim($template, '/');
-        if ( !file_exists($templatePath) ) {
-            throw new RuntimeException('View cannot render template `' . $templatePath . '`. Template does not exist.');
-        }
         ob_start();
-        require $templatePath;
+        require $this->templatePath;
         return ob_get_clean();
     }
-
 }

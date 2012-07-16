@@ -183,8 +183,8 @@
       <div class="controls">
         <div class="input-append">
           <input type="text" class="input-xlarge" id="new-wff-<%= i %>"><% if (showIntroduce) { %><button class="btn introduce-wff" type="button">Introduce</button><% } %>
-          <p class="help-block"></p>
         </div>
+        <p class="help-block"></p>
       </div>
     </script>
 
@@ -275,14 +275,31 @@
             <span class="icon-bar"></span>
           </a>
           <a class="brand" href="#">Learn Equivalences</a>
-          <div class="btn-group pull-right">
-            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-              <i class="icon-user"></i> Username
-              <span class="caret"></span>
-            </a>
-            <ul class="dropdown-menu">
-              <li><a href="#">Sign Out</a></li>
-            </ul>
+          <div id="userManagerView" class="dropdown pull-right">
+            <a class="btn dropdown-toggle" href="#" data-toggle="dropdown"><i class="icon-user"></i> <span id="userManagerBtnText">Login</span> <span class="caret"></span></a>
+            <div class="dropdown-menu">
+              <div id="loginDropdown">
+                <h4>Sign In</h4>
+                <form accept-charset="UTF-8">
+                  <div class="control-group">
+                    <label for="loginUsername">Username</label>
+                    <input id="loginUsername" type="text" name="user[username]" size="30" />
+                    <p class="help-block hide"></p>
+                  </div>
+                  <div class="control-group">
+                    <label for="loginPassword">Password</label>
+                    <input id="loginPassword" type="password" name="user[password]" size="30" />
+                    <p class="help-block hide"></p>
+                  </div>
+                  <p id="loginGeneralError"></p>
+                  <input id="userManagerLoginBtn" class="btn btn-info pull-right" type="submit" name="submit" value="Login" />
+                </form>
+                <a id="userManagerRegisterBtn" class="pull-right" href="#">Register</a>
+              </div>
+              <ul id="logoutDropdown" class="hide">
+                <li><a id="userManagerLogoutBtn" href="#">Log Out</a></li>
+              </ul>
+            </div>
           </div>
           <div class="nav-collapse">
             <ul class="nav">
@@ -324,11 +341,51 @@
     <div id="wffIntroModal" class="modal hide fade"></div>
     <div id="writeNextStepModal" class="modal hide fade"></div>
     <div id="newEqRuleModal" class="modal hide fade"></div>
+    <div id="newUserModal" class="modal hide fade">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">×</button>
+        <h3>Choose your username and password.</h3>
+      </div>
+      <div class="modal-body">
+        <form class="form-horizontal">
+          <fieldset>
+            <div class="control-group">
+              <label class="control-label" for="registerUsername">Username</label>
+              <div class="controls">
+                <div class="input-append">
+                  <input type="text" class="input-xlarge" id="registerUsername"><button id="registerUserAvailBtn" class="btn" type="button">Check</button>
+                </div>
+                <p class="help-block"></p>
+              </div>
+            </div>
+            <div class="control-group">
+              <label class="control-label" for="registerPassword">Password</label>
+              <div class="controls">
+                  <input type="password" class="input-xlarge" id="registerPassword">
+                  <p class="help-block"></p>
+              </div>
+            </div>
+            <div class="control-group hide">
+              <label class="control-label" for="registerPasswordConf">Confirm Password</label>
+              <div class="controls">
+                  <input type="password" class="input-xlarge" id="registerPasswordConf">
+                  <p class="help-block"></p>
+              </div>
+            </div>
+          </fieldset>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-close" data-dismiss="modal">Close</button>
+        <button class="btn btn-primary">Register</button>
+      </div>
+    </div>
     <!-- Le javascript
     ================================================== -->
     <!-- Placed at the end of the document so the pages load faster -->
     <script src="assets/js/lib/json2.js"></script>
     <script src="assets/js/lib/jquery-1.7.2.js"></script>
+    <script src="assets/js/lib/jquery.cookie.js"></script>
     <script src="assets/js/bootstrap-transition.js"></script>
     <script src="assets/js/bootstrap-alert.js"></script>
     <script src="assets/js/bootstrap-modal.js"></script>
@@ -349,6 +406,7 @@
     <script src="assets/js/equivalenceRules.js"></script>
     <script src="assets/js/modals.js"></script>
     <script src="assets/js/exercises.js"></script>
+    <script src="assets/js/users.js"></script>
     <script src="assets/js/learnEquivalences.js"></script>
 
   </body>

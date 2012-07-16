@@ -136,3 +136,49 @@ label {
 .blue {
 	color: #49AFCD;
 }
+
+/***** LOGIN DROPDOWN *****/
+
+#loginDropdown {
+	padding:10px;
+}
+
+#loginDropdown label {
+	font-weight: normal;
+}
+
+#loginDropdown h4 {
+	color: #333;
+	margin-bottom: 5px;
+}
+
+#loginDropdown .control-group {
+	margin: 0;
+}
+
+#loginDropdown input.btn {
+	width: 100%;
+	margin: 0;
+}
+
+#loginDropdown a {
+	padding: 0;
+	clear: none;
+	margin: 5px 0;
+	color: #08C;
+}
+
+#loginGeneralError {
+	color: #B94A48;
+	display: none;
+}
+
+#loginDropdown a:hover {
+	text-decoration: none;
+	color: #005580;
+}
+
+#logoutDropdown {
+	margin: 0;
+	list-style: none;
+}
