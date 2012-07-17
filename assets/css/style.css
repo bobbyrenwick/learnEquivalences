@@ -26,9 +26,8 @@ body {
 	background: #46a546; /* green from bootstrap */
 }
 
-.node {
+.answerStep .node {
 	cursor: pointer;
-	font-size: 18px;
 }
 
 .exerciseHeader {
@@ -57,11 +56,13 @@ li.answerStep {
 	-ms-user-select: none;
 	user-select: none;
 	margin: 10px 0;
+	font-size: 18px;
 }
 
 li.answerStep small {
-	color: #999999;
+	color: #999;
 	margin-left: 10px;
+	font-size: 13px;
 }
 
 .text-block {

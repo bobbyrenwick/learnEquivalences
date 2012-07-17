@@ -29,21 +29,21 @@
     <!-- The templates -->
     <script id="comboNodeTemplate" type="text/template">
   		<% 
-  			if(left != null) {
+  			if (left != null) {
   				var leftNotHigher = left.get("precedence") <= precedence;
-  				if(leftNotHigher) print("(");
+  				if (leftNotHigher) print("(");
   				print("<span class=\"left\"></span>");
-  				if(leftNotHigher) print(")"); 
+  				if (leftNotHigher) print(")"); 
   		 	}
   		%>
   		<span class="symbol"><%= symbol %></span>
   	    <% 
-  	    	if(right != null) {
+  	    	if (right != null) {
   	    		// If binary node then brackets when rightNotHigher, with unary node, it needs to be strictly less
   	    		brackets = (left != null ? right.get("precedence") <= precedence : right.get("precedence") < precedence);
-  	    		if(brackets) print("(");
+  	    		if (brackets) print("(");
   				print("<span class=\"right\"></span>");
-  				if(brackets) print(")");
+  				if (brackets) print(")");
   			}
   		%>
     </script>
@@ -53,7 +53,8 @@
   	</script>
 
   	<script id="answerStepTemplate" type="text/template">
-      <small><%= rule %></small>
+      <span class="stepNo"><%= no %>) </span>
+      <small><%= rule %><% if (from !== null) print(" (" + from + ")"); %></small>
   	</script>
 
 

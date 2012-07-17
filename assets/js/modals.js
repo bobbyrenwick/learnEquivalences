@@ -486,6 +486,7 @@ App.WriteNextStepModalView = App.InExerciseModalView.extend({
 			"direction": this.model.get("eqRuleApplied").direction,
 			"eqRule": this.model.get("eqRuleApplied").rule,
 			"steps": this.model.get("steps"),
+			"step" : this.model.get("steps").last(),
 			modal: this
 		});
 		this.close();

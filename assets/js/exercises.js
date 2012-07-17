@@ -32,9 +32,9 @@ App.StepView = Backbone.View.extend({
 	},
 
 	render: function () {
-		var renderedContent = this.template({ rule : this.model.get("rule") });
+		var renderedContent = this.template({ rule : this.model.get("rule"), no : this.model.get("no"), from : this.model.get("from") });
 		this.$el.html(renderedContent);
-		this.$el.prepend(this.nodeView.deepRender().$el);
+		this.$("span").after(this.nodeView.deepRender().$el);
 		return this; // seems unness but conventional
 	}
 });
@@ -133,36 +133,21 @@ App.StepsView = Backbone.View.extend({
 	},
 
 	onSymbolEnter: function (nodeView) {
-		// Get the step model that holds the node that triggered the event
-		var step = this.getStepFromNode(nodeView);
-		// If this is either the current goal or current input then highlight
-		if (this.collection.isCurrentStep(step)) {
-			nodeView.$el.addClass("highlighted");
-		}
-
+		nodeView.$el.addClass("highlighted");
 	},
 
 	onSymbolLeave: function (nodeView) {
-		// Get the step model that holds the node that triggered the event
-		var step = this.getStepFromNode(nodeView);
-
-		// If this is either the current goal or current input and the node 
-		// hasn't been selected, then remove the highlight
-		if (this.collection.isCurrentStep(step) && !nodeView.model.get("selected")) {
+		// If this the node isn't been selected, then remove the highlight
+		if (!nodeView.model.get("selected")) {
 			nodeView.$el.removeClass("highlighted");
 		}
 	},
 
 	onSymbolClick: function (nodeView) {
-		// Again, get the step that contains this nodeView
+		// Get the step that contains this nodeView
 		var step = this.getStepFromNode(nodeView);
-
-		// If this is current goal/input then trigger the symbol click event,
-		// sending the nodeview that came through - the node view was needed
-		// in order to find out 
-		if (this.collection.isCurrentStep(step)) {
-			this.trigger("symbolClick", nodeView, step, this.collection);
-		}
+		// Trigger the symbol click event, giving node, step and steps
+		this.trigger("symbolClick", nodeView, step, this.collection);
 	}
 });
 
@@ -363,12 +348,15 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	checkIfCompleted: function () {
-
-		var oppositeSet = this.getOppositeSet(_.last(this.get("undoArray"))),
-			// gets the last steps in the undo array and gets the last step from that set
-			lastAddedWff = _.last(this.get("undoArray")).last().get("node").toString(),
+		debugger;
+		var lastSet = _.last(this.get("undoArray"));
+			oppositeSet = this.getOppositeSet(lastSet),
+			lastAddedWffString = lastSet.last().get("node").toString(),
 			self = this;
 
+		// TODO: Go through this set - backwards making an array of the fromStep nos,
+		// Delete all those that werent used on this side, similarly those not used on the other side
+		// Renumber!
 		oppositeSet.each(function (step, idx) {
 			if (step.get("node").toString() === lastAddedWff) {
 				self.set({ completed : true });
@@ -378,11 +366,13 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	// Adds a new step to steps, with newWff as it's node and the rule text and direction it was used in
-	addNewStep : function (newWff, steps, rule, direction) {
+	addNewStep : function (newWff, steps, rule, direction, fromStep) {
 		// Add the step to the steps collection
 		steps.add({
 			node: newWff,
-			rule: rule.get("rule") + " " + (direction > 0 ? "forwards" : "backwards")
+			rule: rule.get("rule") + " " + (direction > 0 ? "forwards" : "backwards"),
+			no : steps.length + 1,
+			from : fromStep.get("no")
 		});
 		// Add the steps to the undoArray
 		this.addToUndo(steps);
@@ -405,10 +395,10 @@ App.Exercise = Backbone.Model.extend({
 		modalView.render();
 	},
 
-	// obj contains newWff, direction and if from WriteNextStepModal - steps, eqRule
+	// obj contains newWff, direction and if from WriteNextStepModal - step, steps, eqRule
 
 	onModalSuccess : function (obj) {
-		this.addNewStep(obj.newWff, obj.steps || this.get("currentlySelectedSteps"), obj.eqRule || this.get("currentlySelectedEqRule"), obj.direction);
+		this.addNewStep(obj.newWff, obj.steps || this.get("currentlySelectedSteps"), obj.eqRule || this.get("currentlySelectedEqRule"), obj.direction, obj.step || this.get("currentlySelectedStep"));
 		this.checkIfCompleted();
 		this.deselectEqRuleAndNode();
 		obj.modal.unbind("modalChooseFail", this.onModalChooseFail);
@@ -428,7 +418,7 @@ App.Exercise = Backbone.Model.extend({
 		var newWff = eqRule.applyRule(direction, matchingPairs, node, step.get("node"));
 			
 		// Add the resulting step to the currently selected steps.
-		this.addNewStep(newWff, steps, eqRule, direction);
+		this.addNewStep(newWff, steps, eqRule, direction, step);
 		this.checkIfCompleted();
 		this.deselectEqRuleAndNode();
 	},
@@ -523,19 +513,19 @@ App.ExerciseView = Backbone.View.extend({
 		// to.
 		this.inputSetView = new App.StepsView({ collection: this.model.get("inputSet"), backwards: false });
 		this.goalSetView = new App.StepsView({ collection: this.model.get("goalSet"), backwards: true });
-		this.inputSetView.bind("symbolClick", this.onNodeSelected, this);
-		this.goalSetView.bind("symbolClick", this.onNodeSelected, this);
+		this.inputSetView.on("symbolClick", this.onNodeSelected, this);
+		this.goalSetView.on("symbolClick", this.onNodeSelected, this);
 
 		// Bind to the event the Exercise triggers when the user tries to apply an eq rule
 		// that isn't applicable to the selected node.
-		this.model.bind("alertEqRuleNotApplicable", this.onEqRuleNotApplicable, this);
+		this.model.on("alertEqRuleNotApplicable", this.onEqRuleNotApplicable, this);
 
 		// Bind to the Exercise's completed member changing.
-		this.model.bind("change:completed", this.onChangeCompleted, this);
+		this.model.on("change:completed", this.onChangeCompleted, this);
 
 		// Bind to the Exercise's undo and unstack availablity members changing.
-		this.model.bind("change:undoAvailable", this.onChangeUndoAvailable, this);
-		this.model.bind("change:unstackAvailable", this.onChangeUnstackAvailable, this);
+		this.model.on("change:undoAvailable", this.onChangeUndoAvailable, this);
+		this.model.on("change:unstackAvailable", this.onChangeUnstackAvailable, this);
 
 	},
 
@@ -876,14 +866,18 @@ App.ExerciseManager = Backbone.Model.extend({
 
 	addNewExercise: function (newExStartWff, newExFinishWff) {
 		this.get("exercises").add([{
-			inputSet: new App.Steps([{
-				node: newExStartWff,
-				rule: "Start Wff"
+			inputSet : new App.Steps([{
+				node : newExStartWff,
+				rule : "Start Wff",
+				no : 1,
+				from : null
 			}]),
 
-			goalSet: new App.Steps([{
-				node: newExFinishWff,
-				rule: "Finish Wff"
+			goalSet : new App.Steps([{
+				node : newExFinishWff,
+				rule : "Finish Wff",
+				no : 1,
+				from : null
 			}])
 		}]);
 	},
