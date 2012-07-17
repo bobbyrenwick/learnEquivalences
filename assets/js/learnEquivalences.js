@@ -27,30 +27,20 @@ App.exerciseManager = new App.ExerciseManager({
 
 App.init = function () {
 
-	// Ensures that the first input box is focused when the new exercise modal is shown
-	$("#newExerciseModal, #writeNextStepModal, #newEqRuleModal").on("shown", function () {
-		$(this).find("input").eq(0).focus();
-	});
-
-	$("#newExerciseBtn").on("click", function () {
-		App.exerciseManager.getNewExercise();
-	});
-
-	$(window).resize(function () {
-
-	});
-
 	// Setup the equivalence rule view
 	var eqRulesView = new App.EquivalenceRulesView({
-		collection: App.equivalenceRules,
-		el: document.getElementById("equivalence-rules-list")
-	}),
+			collection: App.equivalenceRules,
+			el: document.getElementById("equivalence-rules-list")
+		}),
 	
-	router = new App.LearnEqRouter(),
-	exercisesListView = new App.ExercisesListView({
-			collection: App.exerciseManager.get("exercises"),
-			el: document.getElementById("exercisesListView")
+		router = new App.LearnEqRouter();
+		
+	App.exercisesListView = new App.ExercisesListView({
+		collection: App.exerciseManager.get("exercises"),
+		el: document.getElementById("exercisesListView")
 	});
+
+	App.userManager = new App.UserManager();
 
 	// Create a singleton UserManager
 	// Must be after the eqRulesView and ExercisesView have been created
@@ -58,14 +48,32 @@ App.init = function () {
 	// To tell them that the user is logged in. 
 	App.userManagerView = new App.UserManagerView({
 		el : document.getElementById("userManagerView"),
-		model : new App.UserManager()
+		model : App.userManager
 	});
 
 	eqRulesView.render();
 
-	// Ask the user for an exercise
-	//App.exerciseManager.getNewExercise();
+	// Ensures that the first input box is focused when the new exercise modal is shown
+	$("#newExerciseModal, #writeNextStepModal, #newEqRuleModal").on("shown", function () {
+		$(this).find("input").eq(0).focus();
+	});
 
+	$("#newExerciseBtn").on("click", function (e) {
+		e.stopPropagation();
+		e.preventDefault();
+		App.exerciseManager.getNewExercise();
+	});
+
+	$(window).unload(function () {
+		if (App.userManager.isLoggedIn()) { // If the user is logged int
+			// Save the state of the current exercise
+			App.exerciseManager.getCurrentExercise().save({}, { async : false });
+		}
+	});
+
+	$(window).resize(function () {
+
+	});
 
 
 	/* TODO: Work out if this is necessary */

@@ -181,7 +181,7 @@ $app->get('/userEqRules', function () use ($app) {
 		try {
 			$db = connectToDb();
 			$eqrules = $db->eqrules;
-			$cursor = $eqrules->find(array('username' => $username));
+			$cursor = $eqrules->find(array('username' => $username))->sort(array('_id' => 1));
 
 			$userEqRules = array();
 			foreach ($cursor as $doc) {
@@ -227,6 +227,8 @@ $app->post('/exercise', function () use ($app) {
 	}
 });
 
+
+// Exercises should be a complete overwrite
 $app->put('/exercise', function () use ($app) {
 	// Get the request
 	$request = Slim::getInstance()->request();
@@ -242,16 +244,25 @@ $app->put('/exercise', function () use ($app) {
 		$response = $app->response();
 		$response['Content-Type'] = 'application/json';
 
-		$mongoID = new MongoID($exercise->_id);
+		$stringID = $exercise->_id;
+		$mongoID = new MongoID($stringID);
+
+		$exercise->_id = $mongoID;
 
 		// Connect to mongoDB
 		try {
 			$db = connectToDb();
 			$exercises = $db->exercises;
-			$exercises->update(array('_id' => $mongoID), array('$set' => array("username" => $username)));
+			$exercises->update(array('_id' => $mongoID), $exercise);
+
+			$exercise->_id = $stringID;
+			echo json_encode($exercise);
 		} catch (Exception $e) {
 			echo '{"error":{"message":'. $e->getMessage() .'}}';
 		}
+
+	} else {
+		echo '{"error":{"message": "not logged in" }}';
 	}
 });
 
@@ -266,15 +277,15 @@ $app->get('/userExercises', function () use ($app) {
 		try {
 			$db = connectToDb();
 			$exercises = $db->exercises;
-			$cursor = $exercises->find(array('username' => $username));
+			$cursor = $exercises->find(array('username' => $username))->sort(array('_id' => 1));
 
 			$userExercises = array();
 			foreach ($cursor as $doc) {
 				// Extract the id into plain string instead of object
-				$doc["_id"] = $doc["_id"]->{'$id'};
+				$doc["_id"] = $doc["_id"]->__toString();
 				$userExercises[] = $doc;
 			}
-
+			//var_dump($userExercises);
 			echo '{ "error" : false, "exercises" : '.json_encode($userExercises).' }';
 		} catch (Exception $e) {
 			echo '{"error":{"message":'. $e->getMessage() .'}}';

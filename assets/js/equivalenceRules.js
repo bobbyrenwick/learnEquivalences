@@ -400,7 +400,7 @@ App.EquivalenceRulesView = Backbone.View.extend({
 		App.vent.bind("userLoggingOut", this.onUserLoggingOut, this);
 
 		// An array to hold EquivalenceRuleViews
-		this.eqRuleViews = [];
+		this.eqRuleViewModelPairs = [];
 	},
 
 	render: function () {
@@ -442,17 +442,19 @@ App.EquivalenceRulesView = Backbone.View.extend({
 			this.$("li.nav-header").eq(2).before(view.render().el);
 		}
 
-		this.eqRuleViews.push(view);
+		this.eqRuleViewModelPairs.push([view, eqRule]);
 	},
 
 	onUserLoggedIn : function () {
 		var self = this,
 			unsavedEqRules = this.collection.rest(35);
 
-		// Save all eq rules that were addded before login to this new user.
+		// Save all eq rules that were added before login to this new user.
+		// TODO: Same as with exercises - present a save button.
+		/*
 		_.each(unsavedEqRules, function(eqRule) {
 			eqRule.save();
-		})
+		}) */
 
 		$.ajax({
 			
@@ -488,18 +490,21 @@ App.EquivalenceRulesView = Backbone.View.extend({
 
 	removeEqRule : function (eqRule) {
 		// As only ever used to remove user eqs, reduce the search size.
-		var userEqRuleViews = _.rest(this.eqRuleViews,35),
-			noUserEqRuleViews = userEqRuleViews.length,
-			i;
+		var userEqRuleViewModelPairs = _.rest(this.eqRuleViewModelPairs,35);
 
-		for (i = 0; i < noUserEqRuleViews; i++) {
-			if (userEqRuleViews[i].model === eqRule) {
-				userEqRuleViews[i].remove(); // Remove the userEqRule from the DOM
-				this.eqRuleViews.splice(35 + i ,1) // Remove the userEqRule from the array
-				if (userEqRuleViews.length === 1) { // Then we are removing the last user eqRule, so remove the header too.
-					this.$(".nav-header").eq(1).remove();
-				}
-			}
+		// Find the view, eqRule pair that holds the eqRule being deleted.
+		var pairToRemove = _.find(userEqRuleViewModelPairs, function (pair) {
+			return pair[1] === eqRule;
+		});
+
+		// Remove the view from the DOM
+		pairToRemove[0].remove();
+
+		// Remove the view, eqRule pair from the array 
+		this.eqRuleViewModelPairs = _.without(this.eqRuleViewModelPairs, pairToRemove);
+
+		if (this.eqRuleViewModelPairs.length === 35) { // Then we have removed last user eqRule, remove header
+			this.$(".nav-header").eq(1).remove();
 		}
 	}
 });

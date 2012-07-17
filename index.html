@@ -248,12 +248,12 @@
           <button class="btn btn-inverse btn-undo" <% if(!undoAvailable) print("disabled"); %>><i class="icon-circle-arrow-left icon-white"></i> Undo</button>
           <button class="btn btn-inverse btn-unstack" <% if(!unstackAvailable) print("disabled"); %>><i class="icon-remove-sign icon-white"></i> Unstack</button>
         </div>
-        <h1>Exercise <%= no %>&nbsp;<small><%= exerciseString %></small></h1>
+        <h1>Exercise&nbsp;<small><%= exerciseString %></small></h1>
       </div>
     </script>
 
     <script id="exerciseListItemTemplate" type="text/template">
-      <a href="#"><%= no %>)&nbsp;<%= exercise %></a>
+      <a href="#"><%= exercise %></a>
     </script>
 
     <!-- Le fav and touch icons -->

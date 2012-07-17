@@ -68,39 +68,61 @@ App.StepsView = Backbone.View.extend({
 		// i.e working backwards from the goal will stack upwards,
 		// working forwards from the input will stack downwards.
 		this.backwards = this.options.backwards;
+
+		this.stepViewModelPairs = [];
 	},
 
 	render: function () {
-		var $steps,
-			collection = this.collection,
-			self = this;
+		var self = this;
 
 		// Render the StepsView container, passing nothing as it just contains
 		// and empty ul.
 		this.$el.html(this.template({}));
-		$steps = this.$(".stepSet");
 
-		collection.each(function (step) {
-			var view = new App.StepView({
-					model: step,
-					collection: collection
-				});
-
-			// Bind all the nodes 
-			view.nodeView.bindAll("symbolEnterToStep", self.onSymbolEnter, self);
-			view.nodeView.bindAll("symbolLeaveToStep", self.onSymbolLeave, self);
-			view.nodeView.bindAll("symbolClickToStep", self.onSymbolClick, self);
-
-			if (self.backwards) {
-				// Stack upwards
-				$steps.prepend(view.render().$el);
-			} else {
-				// Stack downwards
-				$steps.append(view.render().$el);
-			}
+		this.collection.each(function (step) {
+			self.addNewStepView(step);
 		});
 
 		return this;
+	},
+
+	onAdd : function (step) {
+		this.addNewStepView(step);
+	},
+
+	onRemove : function (eqRule) {
+		// Find the view, eqRule pair that holds the eqRule being deleted.
+		var pairToRemove = _.find(this.stepViewModelPairs, function (pair) {
+			return pair[1] === eqRule;
+		});
+
+		// Remove the view from the DOM
+		pairToRemove[0].remove();
+
+		// Remove the [view, step] pair from the array 
+		this.stepViewModelPairs = _.without(this.stepViewModelPairs, pairToRemove);
+	},
+
+	addNewStepView : function (step) {
+		var view = new App.StepView({
+				model: step,
+				collection: this.collection
+			});
+
+		// Bind all the nodes 
+		view.nodeView.bindAll("symbolEnterToStep", this.onSymbolEnter, this);
+		view.nodeView.bindAll("symbolLeaveToStep", this.onSymbolLeave, this);
+		view.nodeView.bindAll("symbolClickToStep", this.onSymbolClick, this);
+
+		if (this.backwards) {
+			// Stack upwards
+			this.$(".stepSet").prepend(view.render().$el);
+		} else {
+			// Stack downwards
+			this.$(".stepSet").append(view.render().$el);
+		}
+
+		this.stepViewModelPairs.push([view, step]);
 	},
 
 	getStepFromNode: function (nodeView) {
@@ -193,6 +215,9 @@ App.AlertView = Backbone.View.extend({
 // Holds 2 Steps collections
 App.Exercise = Backbone.Model.extend({
 	url : "api/exercise",
+
+	// MongoDB's idAttribute is _id
+	idAttribute: "_id",
 
 	defaults: {
 		current: false,
@@ -361,7 +386,6 @@ App.Exercise = Backbone.Model.extend({
 		});
 		// Add the steps to the undoArray
 		this.addToUndo(steps);
-		//this.save();
 	},
 
 	createWffIntroModalView : function (node, step, eqRule, matchingPairs, direction) {
@@ -451,7 +475,6 @@ App.Exercise = Backbone.Model.extend({
 		var json = _.clone(this.attributes);
 		json.goalSet = json.goalSet.toJSON();
 		json.inputSet = json.inputSet.toJSON();
-		json.current = false;
 		json.currentlySelectedSteps = false;
 		json.currentlySelectedStep = false;
 		json.currentlySelectedNode = false;
@@ -702,8 +725,7 @@ App.ExerciseListItemView = Backbone.View.extend({
 
 	render: function () {
 		var renderedContent = this.template({
-			"exercise" : this.model.get("exerciseString"),
-			"no" : this.model.get("no")
+			"exercise" : this.model.get("exerciseString")
 		});
 
 		this.$el.html(renderedContent);
@@ -733,30 +755,37 @@ App.ExercisesListView = Backbone.View.extend({
 
 	initialize : function () {
 		this.collection.on("add", this.onAdd, this);
+		this.collection.on("remove", this.onRemove, this);
+		this.collection.on("reset", this.onReset, this);
 		this.$exerciseView = $("#exercise-view");
 		this.currentExercise = false;
 		this.currentExerciseView = false;
+		this.exViewModelPairs = [];
+	},
+
+	renderExListItemView : function (exercise) {
+		var exLiView = new App.ExerciseListItemView({
+					model : exercise,
+					collection : self
+				});
+
+		exLiView.bind("exClicked", this.onExClicked, this);
+		this.exViewModelPairs.push([exLiView, exercise]);
+		this.$el.append(exLiView.render().el);
 	},
 
 	render : function () {
 		var self = this;
 
 		this.collection.each(function (exercise) {
-			var exLiView = new App.ExerciseListItemView({
-					model : exercise,
-					collection : self
-				});
-
-			exLiView.bind("exClicked", self.onExClicked, self);
-			self.$el.append(exLiView.render().el);
+			self.renderExListItemView(exercise);
 		});
 
 		return this;
 	},
 
-	onAdd : function () {
-		this.$el.empty();
-		this.render();
+	onAdd : function (exercise) {
+		this.renderExListItemView(exercise)
 
 		if (this.currentExercise === false) {
 			// If this is the first exercise that has been added, then render it to 
@@ -781,6 +810,11 @@ App.ExercisesListView = Backbone.View.extend({
 			this.currentExercise.deselectEqRuleAndNode();
 			this.currentExerciseView.close();
 			this.currentExercise.set({ current: false });
+			
+			// Only save the exercise if it belongs to a user.
+			if (!this.currentExercise.isNew()) {
+				this.currentExercise.save();
+			}
 
 			exercise.set({ current: true });
 			this.currentExercise = exercise;
@@ -789,18 +823,50 @@ App.ExercisesListView = Backbone.View.extend({
 			});
 			this.$exerciseView.html(this.currentExerciseView.render().$el);
 		}
+	},
+
+
+	// TODO: This function may well be useless - along with the "remove" event
+	// Apart from if we want to let users delete exercises?
+	onRemove : function (exercise) {
+		// Find the view, exercise pair that holds the exercise being deleted.
+		var exViewModelPairToRemove = _.find(this.exViewModelPairs, function (pair) {
+			return pair[1] === exercise;
+		});
+
+		// Remove the view from the DOM
+		exViewModelPairToRemove[0].remove();
+
+		// Remove the view, exercise pair from the array 
+		this.exViewModelPairs = _.without(this.exViewModelPairs, exViewModelPairToRemove);
+	},
+
+	onReset : function () {
+		// For each of the [view, exercise] pairs
+		_.each(this.exViewModelPairs, function (pair) {
+			// Remove the view from the DOM
+			pair[0].remove()
+		});
+
+		// There are no longer any [view, exercise] pairs
+		this.exViewModelPairs = [];
+
+		// Empty the current exercise view
+		this.$exerciseView.empty();
+		this.currentExercise = false;
+		this.currentExerciseView = false;
 	}
 });
 
 App.ExerciseManager = Backbone.Model.extend({
 
-	defaults: {
-		exerciseNumber: 1
-	},
-
 	initialize: function () {
 		App.vent.on("userLoggedIn", this.onUserLoggedIn, this);
 		App.vent.on("userLoggingOut", this.onUserLoggingOut, this);
+	},
+
+	getCurrentExercise : function () {
+		return this.get("exercises").find(function (ex) { return ex.get("current"); });
 	},
 
 	getNewExercise: function () {
@@ -809,8 +875,7 @@ App.ExerciseManager = Backbone.Model.extend({
 	},
 
 	addNewExercise: function (newExStartWff, newExFinishWff) {
-		// TODO: Herein lies the issue.
-		this.get("exercises").add({
+		this.get("exercises").add([{
 			inputSet: new App.Steps([{
 				node: newExStartWff,
 				rule: "Start Wff"
@@ -819,24 +884,20 @@ App.ExerciseManager = Backbone.Model.extend({
 			goalSet: new App.Steps([{
 				node: newExFinishWff,
 				rule: "Finish Wff"
-			}]),
-			// override the default of false for testing
-			no: this.get("exerciseNumber")
-		});
-
-		// Add one to the exercise number ready for the next task
-		this.set("exerciseNumber", this.get("exerciseNumber") + 1);
+			}])
+		}]);
 	},
 
 	onUserLoggedIn : function () {
 		var self = this,
 			unsavedEqRules = this.get("exercises").rest(35);
 
-		// Save all the exercises done before the login to the user
-		// To add them to the user that logged in
+		// TODO: replace this with a button that lets the user save individual exercises
+		// This button should be visible on everything but the current exercise.
+		/*
 		this.get("exercises").each( function(ex) {
 			ex.save();
-		});
+		});*/
 
 		$.ajax({
 			
@@ -848,9 +909,11 @@ App.ExerciseManager = Backbone.Model.extend({
 			processData : false,
 
 			success : function (data) {
-				if (!data.error) {
+				if (!data.error && data.exercises.length > 0) {
 					_.each(data.exercises, function (ex) {
 						ex = App.Exercise.parse(ex);
+						// Set current to false for all, this is handled by the listview.
+						ex.current = false;
 					});
 
 					self.get("exercises").add(data.exercises);
@@ -866,6 +929,9 @@ App.ExerciseManager = Backbone.Model.extend({
 	},
 
 	onUserLoggingOut : function () {
-
+		if(this.getCurrentExercise()) {
+			this.getCurrentExercise().save(); // Save the current exercise
+			this.get("exercises").reset(); // Delete all the exercises
+		}
 	}
 });
