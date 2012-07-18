@@ -367,66 +367,52 @@ App.Exercise = Backbone.Model.extend({
 			idxOfMatchingStep = -1,
 			lastStepFrom,
 			usedSteps = [],
-			ununsedSteps = [],
-			allSteps = [],
 			self = this;
 
-		// TODO: Make into a single function that deals with both of the sets
-		// TODO: Renumber the steps!
-		// TODO: Make this save into a
+		// TODO: Make this save into a seperate solutionSteps array - to enable the ability to load
+		// 		 without the solution.
+
 		oppositeSet.each(function (step, idx) { // Go through each of the steps in opposite set
 			if (step.get("node").toString() === lastAddedStepString) {
 				idxOfMatchingStep = idx;
-				
-				// Get the indices of all the steps used
-				lastStepFrom = lastAddedStep.get("from");
-				usedSteps.push(lastSet.length - 1);
-				while (lastStepFrom !== null) {
-					usedSteps.push(lastStepFrom - 1) // Need to go back to 0 index
-					lastStepFrom = lastSet.at(lastStepFrom - 1).get("from"); // Get the step that this step came from.
-				}
-
-				// Delete all the steps that weren't used in the proof
-				for (var i = lastSet.length - 1; i > 0; i--) {
-					if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
-						lastSet.remove(lastSet.at(i)); // Remove the step from the set.
-					}
-				}
-
-				// Redo all the numbering
-				for (var i = 1, noSteps = lastSet.length; i < noSteps; i++) {
-					lastSet.at(i).set({
-						no : i + 1,
-						from : i
-					});
-				}
-				
-				// Do the same for the other side
-				usedSteps = []
-				
-				// Get the indices of all the steps used
-				matchingStepFrom = oppositeSet.at(idxOfMatchingStep).get("from");
-				
-				if (matchingStepFrom !== null) { 
-					usedSteps.push(matchingSet.length - 1);
-				}
-
-				while (lastStepFrom !== null) {
-					usedSteps.push(matchingStepFrom - 1) // Need to go back to 0 index
-					matchingStepFrom = oppositeSet.at(matchingStepFrom - 1).get("from"); // Get the step that this step came from.
-				}
-
-				// This shouldn't affect positions within the array.
-				for (var i = oppositeSet.length - 1; i > 0; i--) {
-					if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
-						oppositeSet.remove(oppositeSet.at(i)); // Remove the step from the set.
-					}
-				}
-
-
+				self.cleanUpSteps(lastSet, lastSet.length - 1);
+				self.cleanUpSteps(oppositeSet, idxOfMatchingStep);
 				self.set({ completed : true });
 			}
 		});
+	},
+
+	cleanUpSteps : function (steps, idx) {
+		var usedSteps = [],
+			i,
+			noSteps;
+
+		// Get the indices of all the steps used
+		lastStepFrom = steps.at(idx).get("from");
+		
+		if (lastStepFrom != null) {
+			usedSteps.push(steps.length - 1);
+		}
+
+		while (lastStepFrom !== null) {
+			usedSteps.push(lastStepFrom - 1) // Need to go back to 0 index
+			lastStepFrom = steps.at(lastStepFrom - 1).get("from"); // Get the step that this step came from.
+		}
+
+		// Delete all the steps that weren't used in the proof
+		for (i = steps.length - 1; i > 0; i--) {
+			if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
+				steps.remove(steps.at(i)); // Remove the step from the set.
+			}
+		}
+
+		// Redo all the numbering
+		for (i = 1, noSteps = steps.length; i < noSteps; i++) {
+			steps.at(i).set({
+				no : i + 1,
+				from : i
+			});
+		}
 	},
 
 	// Adds a new step to steps, with newWff as it's node and the rule text and direction it was used in
