@@ -29,13 +29,25 @@ App.StepView = Backbone.View.extend({
 
 	initialize: function () {
 		this.nodeView = new App.AnswerNodeView({ model: this.model.get("node") });
+
+		this.model.on("change:from", this.onChangeFrom, this);
+		this.model.on("change:no", this.onChangeNo, this);
+
 	},
 
 	render: function () {
 		var renderedContent = this.template({ rule : this.model.get("rule"), no : this.model.get("no"), from : this.model.get("from") });
 		this.$el.html(renderedContent);
-		this.$("span").after(this.nodeView.deepRender().$el);
+		this.$("span.stepNo").after(this.nodeView.deepRender().$el);
 		return this; // seems unness but conventional
+	},
+
+	onChangeFrom : function () {
+		this.$("span.stepFrom").text(" (" + this.model.get("from") + ")");
+	},
+
+	onChangeNo : function () {
+		this.$("span.stepNo").text(this.model.get("no") + ") ");
 	}
 });
 
@@ -348,19 +360,71 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	checkIfCompleted: function () {
-		debugger;
-		var lastSet = _.last(this.get("undoArray"));
+		var lastSet = _.last(this.get("undoArray")),
 			oppositeSet = this.getOppositeSet(lastSet),
-			lastAddedWffString = lastSet.last().get("node").toString(),
+			lastAddedStep = lastSet.last(),
+			lastAddedStepString = lastAddedStep.get("node").toString(),
+			idxOfMatchingStep = -1,
+			lastStepFrom,
+			usedSteps = [],
+			ununsedSteps = [],
+			allSteps = [],
 			self = this;
 
-		// TODO: Go through this set - backwards making an array of the fromStep nos,
-		// Delete all those that werent used on this side, similarly those not used on the other side
-		// Renumber!
-		oppositeSet.each(function (step, idx) {
-			if (step.get("node").toString() === lastAddedWff) {
+		// TODO: Make into a single function that deals with both of the sets
+		// TODO: Renumber the steps!
+		// TODO: Make this save into a
+		oppositeSet.each(function (step, idx) { // Go through each of the steps in opposite set
+			if (step.get("node").toString() === lastAddedStepString) {
+				idxOfMatchingStep = idx;
+				
+				// Get the indices of all the steps used
+				lastStepFrom = lastAddedStep.get("from");
+				usedSteps.push(lastSet.length - 1);
+				while (lastStepFrom !== null) {
+					usedSteps.push(lastStepFrom - 1) // Need to go back to 0 index
+					lastStepFrom = lastSet.at(lastStepFrom - 1).get("from"); // Get the step that this step came from.
+				}
+
+				// Delete all the steps that weren't used in the proof
+				for (var i = lastSet.length - 1; i > 0; i--) {
+					if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
+						lastSet.remove(lastSet.at(i)); // Remove the step from the set.
+					}
+				}
+
+				// Redo all the numbering
+				for (var i = 1, noSteps = lastSet.length; i < noSteps; i++) {
+					lastSet.at(i).set({
+						no : i + 1,
+						from : i
+					});
+				}
+				
+				// Do the same for the other side
+				usedSteps = []
+				
+				// Get the indices of all the steps used
+				matchingStepFrom = oppositeSet.at(idxOfMatchingStep).get("from");
+				
+				if (matchingStepFrom !== null) { 
+					usedSteps.push(matchingSet.length - 1);
+				}
+
+				while (lastStepFrom !== null) {
+					usedSteps.push(matchingStepFrom - 1) // Need to go back to 0 index
+					matchingStepFrom = oppositeSet.at(matchingStepFrom - 1).get("from"); // Get the step that this step came from.
+				}
+
+				// This shouldn't affect positions within the array.
+				for (var i = oppositeSet.length - 1; i > 0; i--) {
+					if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
+						oppositeSet.remove(oppositeSet.at(i)); // Remove the step from the set.
+					}
+				}
+
+
 				self.set({ completed : true });
-				oppositeSet.remove(oppositeSet.rest(idx + 1));
 			}
 		});
 	},
