@@ -33,10 +33,18 @@ App.StepView = Backbone.View.extend({
 		this.model.on("change:from", this.onChangeFrom, this);
 		this.model.on("change:no", this.onChangeNo, this);
 
+		// Used for determining whether to display in roman numerals or not
+		// i.e working backwards will display in roman numerals
+		this.backwards = this.options.backwards;
 	},
 
 	render: function () {
-		var renderedContent = this.template({ rule : this.model.get("rule"), no : this.model.get("no"), from : this.model.get("from") });
+		var renderedContent = this.template({ 
+				rule : this.model.get("rule"),
+				no : (!this.backwards ? this.model.get("no") : App.toRomanNumerals(this.model.get("no"))),
+				from : (!this.backwards && this.model.get("from") ? this.model.get("from") : App.toRomanNumerals(this.model.get("from")))
+			})
+;
 		this.$el.html(renderedContent);
 		this.$("span.stepNo").after(this.nodeView.deepRender().$el);
 		return this; // seems unness but conventional
@@ -118,7 +126,8 @@ App.StepsView = Backbone.View.extend({
 	addNewStepView : function (step) {
 		var view = new App.StepView({
 				model: step,
-				collection: this.collection
+				collection: this.collection,
+				backwards : this.backwards
 			});
 
 		// Bind all the nodes 

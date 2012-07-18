@@ -13,6 +13,10 @@ body {
 	cursor: pointer;
 }
 
+#mainAppRow > div {
+	height: 100%;
+}
+
 /* Node highlighting */
 .highlighted, .completed {
 	border-radius: 3px;
@@ -87,12 +91,15 @@ li.exerciseListItem {
 	padding-left: 10px;
 }
 
-#eq-rules-list-container {
-	/* This needs to be resized automatically to fill the rest of the browser 
-	   from the header downwards
-	*/
-	height: 650px;
+#eqRulesListContainer {
+	height: 100%;
 	overflow-y: auto;
+	margin-bottom: 0;
+	padding: 0;
+}
+
+#eqRulesList {
+	padding: 9px 15px;
 }
 
 .nav-header:hover {
