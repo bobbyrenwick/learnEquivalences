@@ -131,6 +131,10 @@ label {
 	display:inline-block;
 }
 
+.strikethrough {
+	text-decoration: line-through;
+}
+
 .modal h4 {
 	margin-bottom: 15px;
 	padding-bottom: 5px;

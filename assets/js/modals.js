@@ -171,7 +171,7 @@ App.EqRuleDirChooseModalView = App.InExerciseModalView.extend({
 			this.$('fieldset').append(this.connectiveToolbar.render().$el);
 		}
 
-		this.$("fieldset").append("<h4 class=\"green\">Forwards application</h4>");
+		this.$("fieldset").append("<h4 class=\"green\">LTR application</h4>");
 		if (!this.model.get("fwdResult")) {
 			// Render all the inputs needed for the forwards application
 			this.renderSubFIntroFormBlocks(this.model.get("fwdIntroSymbols"), {
@@ -185,7 +185,7 @@ App.EqRuleDirChooseModalView = App.InExerciseModalView.extend({
 			this.$("fieldset").append(this.fwdWffFormBlockView.render().$el);
 		}
 
-		this.$("fieldset").append("<h4 class=\"blue\">Backwards application</h4>");
+		this.$("fieldset").append("<h4 class=\"blue\">RTL application</h4>");
 
 		if (!this.model.get("bwdResult")) {
 			this.renderSubFIntroFormBlocks(this.model.get("bwdIntroSymbols"), {
@@ -473,7 +473,7 @@ App.WriteNextStepModalView = App.InExerciseModalView.extend({
 
 		this.closeToolbar();
 
-		this.$("input").closest(".controls").html("<p class=\"bwdResult text-block\">" + obj.newNode.toString() + "&nbsp;<small>&nbsp;" + this.model.get("eqRuleApplied").rule.get("rule") + " " + (this.model.get("eqRuleApplied").direction > 0 ? "forwards" : "backwards") + "</small></p>");
+		this.$("input").closest(".controls").html("<p class=\"bwdResult text-block\">" + obj.newNode.toString() + "&nbsp;<small>&nbsp;" + this.model.get("eqRuleApplied").rule.get("rule") + " " + (this.model.get("eqRuleApplied").direction > 0 ? "ltr" : "rtl") + "</small></p>");
 		this.$(".btn-success").removeAttr("disabled");
 	},
 
@@ -535,7 +535,7 @@ App.WffIntroModalView = App.InExerciseModalView.extend({
 		var renderedContent = this.template({
 			rule: this.model.get("eqRule").get("rule"),
 			node: this.model.get("node").toString(),
-			direction: (this.model.get("direction") > 0 ? "forwards" : "backwards"),
+			direction: (this.model.get("direction") > 0 ? "ltr" : "rtl"),
 			multipleSymbols: this.model.get("introSymbols").length > 1,
 			introSymbolsCS: this.model.get("introSymbols").join(", ")
 		}),

@@ -6,6 +6,14 @@ App.Step = Backbone.Model.extend({
 		var json = _.clone(this.attributes);
 		json.node = json.node.toString();
 		return json;
+	},
+
+	// An override of the normal Backbone model clone used when saving a completed
+	// Step - needed to create a copy of the tree
+	clone : function () {
+		var attrs = _.clone(this.attributes);
+		attrs.node = attrs.node.deepClone();
+		return new this.constructor(attrs);
 	}
 });
 
@@ -32,6 +40,7 @@ App.StepView = Backbone.View.extend({
 
 		this.model.on("change:from", this.onChangeFrom, this);
 		this.model.on("change:no", this.onChangeNo, this);
+		this.model.on("change:unused", this.onChangeUnused, this);
 
 		// Used for determining whether to display in roman numerals or not
 		// i.e working backwards will display in roman numerals
@@ -43,8 +52,8 @@ App.StepView = Backbone.View.extend({
 				rule : this.model.get("rule"),
 				no : (!this.backwards ? this.model.get("no") : App.toRomanNumerals(this.model.get("no"))),
 				from : (!this.backwards && this.model.get("from") ? this.model.get("from") : App.toRomanNumerals(this.model.get("from")))
-			})
-;
+			});
+
 		this.$el.html(renderedContent);
 		this.$("span.stepNo").after(this.nodeView.deepRender().$el);
 		return this; // seems unness but conventional
@@ -56,6 +65,12 @@ App.StepView = Backbone.View.extend({
 
 	onChangeNo : function () {
 		this.$("span.stepNo").text(this.model.get("no") + ") ");
+	},
+
+	onChangeUnused : function () {
+		if (this.model.get("unused")) {
+			this.$el.addClass("strikethrough");
+		}
 	}
 });
 
@@ -67,10 +82,76 @@ App.Steps = Backbone.Collection.extend({
 		// do nothing
 	},
 
-	// A step is a current step if it is the most recently added step to the collection
-	// Therefore check if the step passed in is the last in the collection.
-	isCurrentStep: function (step) {
-		return step === this.last();
+	// A check to see if this is the input/goal steps
+	isInputSteps: function () {
+		// Check if the rule is Start Wff
+		return "S" === this.at(0).get("rule")[0];
+	},
+
+	getStepsString : function () {
+		if (this.isInputSteps()) {
+			return "inputSet";
+		}
+		return "goalSet";
+	},
+
+	renumberSteps : function () {
+		var i, noSteps;
+
+		for (i = 1, noSteps = this.length; i < noSteps; i++) {
+			this.at(i).set({
+				no : i + 1,
+				from : i
+			});
+		}
+	},
+
+	showUnusedSteps : function (idx) {
+		var usedSteps,
+			i,
+			noSteps;
+
+		usedSteps = this.findAncestorSteps(idx);
+
+		// Delete all the steps that weren't used in the proof
+		for (i = this.length - 1; i > 0; i--) {
+			if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
+				this.at(i).set({ unused: true });
+			}
+		}
+	},
+
+	// Finds all the steps that the step at idx relies upon
+	findAncestorSteps : function (idx) {
+		var steps = [],
+			idxCameFrom;
+
+		// Get the indices of all the steps used
+		idxCameFrom = this.at(idx).get("from");
+
+		if (idxCameFrom != null) {
+			steps.push(this.length - 1);
+		}
+
+		while (idxCameFrom !== null) {
+			steps.push(idxCameFrom - 1) // Need to go back to 0 index
+			idxCameFrom = this.at(idxCameFrom - 1).get("from"); // Get the step that this step came from.
+		}
+
+		return steps;
+	},
+
+	// Finds all the steps that rely upon the step at idx
+	findChildSteps : function (idx) {
+		var steps = [idx], // include the idx in the list of child steps
+			nextIdx;
+
+		// Find all the steps that rely upon this one
+		this
+
+
+
+
 	}
 });
 
@@ -226,14 +307,16 @@ App.Exercise = Backbone.Model.extend({
 	idAttribute: "_id",
 
 	defaults: {
-		current: false,
-		completed: false,
-		currentlySelectedNode: false,
-		currentlySelectedStep: false,
-		currentlySelectedEqRule: false,
-		currentlySelectedSteps: false,
-		undoAvailable: false,
-		unstackAvailable: false
+		current : false,
+		currentlySelectedNode : null,
+		currentlySelectedStep : null,
+		currentlySelectedEqRule : null,
+		currentlySelectedSteps : null,
+		undoAvailable : false,
+		unstackAvailable : false,
+		completed : false,
+		completedInputSet : null,
+		completedGoalSet : null
 	},
 
 	initialize: function () {
@@ -290,7 +373,7 @@ App.Exercise = Backbone.Model.extend({
 			this.get("currentlySelectedEqRule").set({ active: false });
 		}
 		// Set the Exercise's record of selected eq rule to false
-		this.set({ currentlySelectedEqRule : false });
+		this.set({ currentlySelectedEqRule : null });
 	},
 
 	// Deselects the currently active Node
@@ -301,9 +384,9 @@ App.Exercise = Backbone.Model.extend({
 		}
 		// Set the Exercise's record of selected node to false
 		this.set({
-			currentlySelectedNode: false,
-			currentlySelectedStep: false,
-			currentlySelectedSteps: false
+			currentlySelectedNode: null,
+			currentlySelectedStep: null,
+			currentlySelectedSteps: null
 		});
 		this.trigger("changeCurrentlySelectedNodeEtc");
 	},
@@ -369,71 +452,59 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	checkIfCompleted: function () {
-		var lastSet = _.last(this.get("undoArray")),
-			oppositeSet = this.getOppositeSet(lastSet),
-			lastAddedStep = lastSet.last(),
+		var lastStepsStepPair = _.last(this.get("undoArray")),
+			lastAddedSteps = this.get(lastStepsStepPair[0]),
+			lastAddedStep = lastAddedSteps.at(lastStepsStepPair[1]),
+			oppositeSet = this.getOppositeSet(lastAddedSteps),
 			lastAddedStepString = lastAddedStep.get("node").toString(),
 			idxOfMatchingStep = -1,
 			lastStepFrom,
 			usedSteps = [],
 			self = this;
 
-		// TODO: Make this save into a seperate solutionSteps array - to enable the ability to load
-		// 		 without the solution.
-
 		oppositeSet.each(function (step, idx) { // Go through each of the steps in opposite set
 			if (step.get("node").toString() === lastAddedStepString) {
 				idxOfMatchingStep = idx;
-				self.cleanUpSteps(lastSet, lastSet.length - 1);
-				self.cleanUpSteps(oppositeSet, idxOfMatchingStep);
-				self.set({ completed : true });
+				lastAddedSteps.showUnusedSteps(lastAddedSteps.length - 1);
+				oppositeSet.showUnusedSteps(idxOfMatchingStep);
+				self.saveCompletedVersion();
+				self.set({ 
+					completed : true,
+					undoAvailable : false
+				});
 			}
 		});
 	},
 
-	cleanUpSteps : function (steps, idx) {
-		var usedSteps = [],
-			i,
-			noSteps;
+	saveCompletedVersion : function () {
+		var stepPairs = [["inputSet", "completedInputSet"], ["goalSet", "completedGoalSet"]],
+			self = this;
 
-		// Get the indices of all the steps used
-		lastStepFrom = steps.at(idx).get("from");
-		
-		if (lastStepFrom != null) {
-			usedSteps.push(steps.length - 1);
-		}
+		_.each(stepPairs, function (stepPair) {
+			var normalSteps = self.get(stepPair[0]),
+				completedSteps = stepPair[1],
+				usedSteps = normalSteps.filter(function (step) { return !step.get("unused"); });
 
-		while (lastStepFrom !== null) {
-			usedSteps.push(lastStepFrom - 1) // Need to go back to 0 index
-			lastStepFrom = steps.at(lastStepFrom - 1).get("from"); // Get the step that this step came from.
-		}
-
-		// Delete all the steps that weren't used in the proof
-		for (i = steps.length - 1; i > 0; i--) {
-			if (usedSteps.indexOf(i) < 0) { // Then this index hasn't been used in the proof
-				steps.remove(steps.at(i)); // Remove the step from the set.
-			}
-		}
-
-		// Redo all the numbering
-		for (i = 1, noSteps = steps.length; i < noSteps; i++) {
-			steps.at(i).set({
-				no : i + 1,
-				from : i
-			});
-		}
+			// Set the completed steps to be a copy of those steps that were used
+			self.set(completedSteps, new App.Steps(_.map(usedSteps, function(step) { return step.clone(); })));
+			// Renumber the steps to account for unused steps
+			self.get(completedSteps).renumberSteps();
+		});
 	},
 
 	// Adds a new step to steps, with newWff as it's node and the rule text and direction it was used in
 	addNewStep : function (newWff, steps, rule, direction, fromStep) {
-		// Add the step to the steps collection
-		steps.add({
-			node: newWff,
-			rule: rule.get("rule") + " " + (direction > 0 ? "forwards" : "backwards"),
-			no : steps.length + 1,
-			from : fromStep.get("no")
-		});
-		// Add the steps to the undoArray
+		var newStep = new App.Step({
+				node: newWff,
+				rule: rule.get("rule") + " " + (direction > 0 ? "ltr" : "rtl"),
+				no : steps.length + 1,
+				from : fromStep.get("no"),
+				unused : false
+			});
+
+		// Add the new step to the steps collection
+		steps.add(newStep);
+		// Add a [stepsString, stepPos] pair to the undoArray
 		this.addToUndo(steps);
 	},
 
@@ -483,25 +554,35 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	addToUndo : function (steps) {
-		this.get("undoArray").push(steps);
+		// Add a [stepsString, stepPos] pair to the undoArray
+		this.get("undoArray").push([steps.getStepsString(), steps.length - 1]);
 		if (this.get("undoArray").length === 1) { this.set({ undoAvailable : true }); }
 	},
 
 	undo : function () {
-		var undoArray = this.get("undoArray");
+		var undoArray = this.get("undoArray"),
+			lastPair,
+			stepsString,
+			steps,
+			stepPos;
+		
 		if (this.get("undoAvailable")) {
-			// Removes the last Step from the Steps collection that was last added to
-			_.last(undoArray).pop();
-			// Remove the references to the Steps that was just used
-			undoArray.pop();
+			// Pop off the reference to the last [stepsString, stepPos] pair added.
+			lastPair = undoArray.pop();
+			stepsString = lastPair[0];
+			stepPos = lastPair[1];
+			steps = this.get(stepsString);
+
+			// Removes the last Step from thoses Steps
+			steps.remove(steps.at(stepPos));
+			
 			// If there is nothing else in the undoArray disable the undo feature.
 			if (undoArray.length === 0) { this.set({ undoAvailable : false }); }
-			// If the exercise was complete, it now isn't
-			if (this.get("completed")) { this.set({ completed: false }); }
 			this.deselectEqRuleAndNode();
 		}
 	},
 
+	// TODO: make this delete the resulting wffs as well
 	unstack : function () {
 		var lastUndoPos = -1,
 			undoArray = this.get("undoArray");
@@ -524,10 +605,10 @@ App.Exercise = Backbone.Model.extend({
 		var json = _.clone(this.attributes);
 		json.goalSet = json.goalSet.toJSON();
 		json.inputSet = json.inputSet.toJSON();
-		json.currentlySelectedSteps = false;
-		json.currentlySelectedStep = false;
-		json.currentlySelectedNode = false;
-		json.currentlySelectedEqRule = false;
+		json.currentlySelectedSteps = null;
+		json.currentlySelectedStep = null;
+		json.currentlySelectedNode = null;
+		json.currentlySelectedEqRule = null;
 		return json;
 	},
 
@@ -543,6 +624,7 @@ App.Exercise = Backbone.Model.extend({
 				return new App.Step(step);
 			})
 		);
+
 		exJSON.goalSet = new App.Steps(
 			_.map(exJSON.goalSet, function (step) {
 				step.node = App.parser.parse(step.node);
@@ -929,14 +1011,16 @@ App.ExerciseManager = Backbone.Model.extend({
 				node : newExStartWff,
 				rule : "Start Wff",
 				no : 1,
-				from : null
+				from : null,
+				unused : false
 			}]),
 
 			goalSet : new App.Steps([{
 				node : newExFinishWff,
 				rule : "Finish Wff",
 				no : 1,
-				from : null
+				from : null,
+				unused : false
 			}])
 		}]);
 	},
@@ -982,8 +1066,9 @@ App.ExerciseManager = Backbone.Model.extend({
 	},
 
 	onUserLoggingOut : function () {
-		if(this.getCurrentExercise()) {
-			this.getCurrentExercise().save(); // Save the current exercise
+		if (App.exercisesListView.currentExercise) {
+			App.exercisesListView.currentExercise.save(); // Save the current exercise
+			App.exercisesListView.currentExerciseView.close();
 			this.get("exercises").reset(); // Delete all the exercises
 		}
 	}
