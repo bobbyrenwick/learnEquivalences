@@ -449,12 +449,7 @@ App.EquivalenceRulesView = Backbone.View.extend({
 		var self = this,
 			unsavedEqRules = this.collection.rest(35);
 
-		// Save all eq rules that were added before login to this new user.
-		// TODO: Same as with exercises - present a save button.
-		/*
-		_.each(unsavedEqRules, function(eqRule) {
-			eqRule.save();
-		}) */
+		this.collection.remove(unsavedEqRules);
 
 		$.ajax({
 			

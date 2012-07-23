@@ -407,5 +407,17 @@ App.AnswerNodeView = App.NodeView.extend({
 		} else {
 			this.$el.removeClass("highlighted");
 		}
+	},
+
+	onClose : function () {
+		if (this.leftView) {
+			this.lefView.close();
+		}
+
+		if (this.rightView) {
+			this.rightView.close();
+		}
+		
+		this.model.off(null, null, this);
 	}
 });

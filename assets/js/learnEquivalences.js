@@ -25,7 +25,7 @@ App.exerciseManager = new App.ExerciseManager({
 	exercises: new App.Exercises()
 });
 
-// An algorithm for converting an integer to
+// An algorithm for converting an integer to roman numerals
 App.toRomanNumerals = function (num) {
 	var lookup = { m : 1000, cm : 900, d : 500, cd : 400, c : 100, xc : 90, l : 50, xl : 40, x : 10, ix : 9, v : 5, iv : 4, i : 1 },
 		roman = "",

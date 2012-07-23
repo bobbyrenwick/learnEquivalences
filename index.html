@@ -181,7 +181,7 @@
 	  <label class="control-label" for="new-wff-<%= i %>"><%= label %></label>
 	  <div class="controls">
 		<div class="input-append">
-		  <input type="text" class="input-xlarge" id="new-wff-<%= i %>"><% if (showIntroduce) { %><button class="btn introduce-wff" type="button">Introduce</button><% } %>
+		  <input type="text" class="input-xlarge" id="new-wff-<%= i %>" <% if (value) print("value=\"" + value + "\"");  %>><% if (showIntroduce) { %><button class="btn introduce-wff" type="button">Introduce</button><% } %>
 		</div>
 		<p class="help-block"></p>
 	  </div>
@@ -245,14 +245,20 @@
 	  <div class="exerciseHeader">
 		<div class="btn-group pull-right">
 		  <button class="btn btn-inverse btn-undo" <% if(!undoAvailable) print("disabled"); %>><i class="icon-circle-arrow-left icon-white"></i> Undo</button>
-		  <button class="btn btn-inverse btn-unstack" <% if(!unstackAvailable) print("disabled"); %>><i class="icon-remove-sign icon-white"></i> Unstack</button>
+		  <button class="btn btn-inverse btn-unstack" <% if(!unstackAvailable) print("disabled"); %>><i class="icon-remove-sign icon-white"></i> Delete Step</button>
 		</div>
 		<h1>Exercise&nbsp;<small><%= exerciseString %></small></h1>
 	  </div>
 	</script>
 
+	<script id="solutionTemplate" type="text/template">
+	  <div class="exerciseHeader">
+		<h1>Solution&nbsp;<small><%= exerciseString %></small></h1>
+	  </div>
+	</script>
+
 	<script id="exerciseListItemTemplate" type="text/template">
-	  <a href="#"><%= exercise %></a>
+		<a href="#"><%= exercise %></a>
 	</script>
 
 	<!-- Le fav and touch icons -->
@@ -323,7 +329,7 @@
 			<div class="span3" id="exercises-view">
 				<div class="inner-padding-left">
 					<h2>Exercises</h2>
-					<ul id="exercisesListView" class="nav nav-list"></ul>
+					<ul id="exercisesListView"></ul>
 				</div>
 			</div><!-- end rhs col -->
 		</div><!--/mainAppRow-->

@@ -18,12 +18,16 @@ body {
 }
 
 /* Node highlighting */
-.highlighted, .completed {
+.highlighted, .completed, .highlightedDel {
 	border-radius: 3px;
 }
 
 .highlighted {
 	background: #ffc40d; /* yellow from bootstrap */
+}
+
+.highlightedDel, .hightlighted.highlightedDel {
+	background: #ff3333; /* red from bootstrap */
 }
 
 .completed {
@@ -72,12 +76,6 @@ li.answerStep small {
 .text-block {
 	margin-top: 5px;
 	margin-bottom: 0;
-}
-
-li.exerciseListItem {
-	line-height: 18px;
-	font-size: 14px;
-	text-rendering: optimizelegibility;
 }
 
 #exercises-view {
@@ -147,6 +145,31 @@ label {
 
 .blue {
 	color: #49AFCD;
+}
+
+.alert-block > p {
+	margin-top: 5px;
+}
+
+
+/***** EXERCISE LIST VIEW *****/
+
+#exercisesListView {
+	list-style:none;
+	margin: 0;
+}
+
+.exerciseListItem {
+	line-height: 18px;
+	font-size: 14px;
+	text-rendering: optimizelegibility;
+	margin: 2px 0;
+}
+
+.exerciseListItem i {
+	margin-top: 2px;
+	margin-left: 5px;
+	cursor: pointer;
 }
 
 /***** LOGIN DROPDOWN *****/

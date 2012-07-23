@@ -326,7 +326,8 @@ App.NewEqRuleModalView = App.ModalView.extend({
 					showIntroduce: false,
 					collapseWhenDone: false,
 					"label": label,
-					"i": i
+					"i": i,
+					"value" : self.model.get(label) || "" // NewEqRuleModal can have "Right Hand Side" / "Left Hand Side" stuff that gets placed in text box automatically.
 				})
 			});
 
@@ -744,7 +745,8 @@ App.WffFormBlockView = Backbone.View.extend({
 App.SubFIntroFormBlock = Backbone.Model.extend({
 	defaults: {
 		error: false,
-		i: 0
+		i: 0,
+		value : ""
 	}
 });
 

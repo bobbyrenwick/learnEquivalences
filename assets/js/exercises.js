@@ -2,9 +2,15 @@ var App = App || {};
 
 // Each Step holds any type of node
 App.Step = Backbone.Model.extend({
+
+	defaults : {
+		highlightedDel : false
+	},
+
 	toJSON : function () {
 		var json = _.clone(this.attributes);
 		json.node = json.node.toString();
+		json.highlightedDel = false;
 		return json;
 	},
 
@@ -41,6 +47,7 @@ App.StepView = Backbone.View.extend({
 		this.model.on("change:from", this.onChangeFrom, this);
 		this.model.on("change:no", this.onChangeNo, this);
 		this.model.on("change:unused", this.onChangeUnused, this);
+		this.model.on("change:highlightedDel", this.onChangeHighlightedDel, this);
 
 		// Used for determining whether to display in roman numerals or not
 		// i.e working backwards will display in roman numerals
@@ -71,6 +78,19 @@ App.StepView = Backbone.View.extend({
 		if (this.model.get("unused")) {
 			this.$el.addClass("strikethrough");
 		}
+	},
+
+	onChangeHighlightedDel: function () {
+		if (this.model.get("highlightedDel")) {
+			this.$(".node").eq(0).addClass("highlightedDel");
+		} else {
+			this.$(".node").eq(0).removeClass("highlightedDel");
+		}
+	},
+
+	onClose : function () {
+		this.nodeView.close();
+		this.model.off(null, null, this);
 	}
 });
 
@@ -95,7 +115,7 @@ App.Steps = Backbone.Collection.extend({
 		return "goalSet";
 	},
 
-	renumberSteps : function () {
+	renumber : function () {
 		var i, noSteps;
 
 		for (i = 1, noSteps = this.length; i < noSteps; i++) {
@@ -144,14 +164,36 @@ App.Steps = Backbone.Collection.extend({
 	// Finds all the steps that rely upon the step at idx
 	findChildSteps : function (idx) {
 		var steps = [idx], // include the idx in the list of child steps
-			nextIdx;
+			itsChildren,
+			i,
+			noSteps = this.length;
 
-		// Find all the steps that rely upon this one
-		this
+		// Find all the indexes of steps in front of this one
+		// that rely upon this one and add to steps.
+		for (i = idx + 1; i < noSteps; i++) {
+			if (this.at(i).get("from") === (idx + 1)) {
+				itsChildren = this.findChildSteps(i);
+				steps = steps.concat(itsChildren);
+			}
+		}
 
+		return steps;
+	},
 
+	highlightForDel : function (idxs) {
+		var self = this;
 
+		_.each(idxs, function(i) {
+			self.at(i).set({
+				highlightedDel : true
+			});
+		});
+	},
 
+	removeDelHighlights : function () {
+		this.each(function (step) {
+			step.set({ highlightedDel : false });
+		});
 	}
 });
 
@@ -250,6 +292,17 @@ App.StepsView = Backbone.View.extend({
 		var step = this.getStepFromNode(nodeView);
 		// Trigger the symbol click event, giving node, step and steps
 		this.trigger("symbolClick", nodeView, step, this.collection);
+	},
+
+	onClose : function () {
+		// Remove all bindings to callbacks for events for the Steps within this context.
+		this.collection.off(null, null, this);
+		
+		_.each(this.stepViewModelPairs, function(pair) {
+			// Remove all callbacks the nodeview within this context.
+			pair[0].nodeView.off(null, null, this);
+			pair[0].close();
+		});
 	}
 });
 
@@ -278,14 +331,31 @@ App.AlertView = Backbone.View.extend({
 	},
 
 	initialize: function () {
-		// The alert can optionally be created with a delay option in ms
+		// Go through and add the options to this view - used for when events are passed through
+		// to the constructor and their counterpart functions.
+		for (i in this.options) {
+			if (i !== "model") {
+				this[i] = this.options[i];
+			}
+		}
 	},
 
 	render: function () {
 		var renderedContent = this.template(this.model.toJSON()),
+			buttons = this.model.get("buttons"),
+			$buttonsP,
 			self = this;
 
 		this.$el.html(renderedContent);
+
+		if (buttons) {
+			$buttonsP = $("<p></p>").appendTo(this.$el);
+			_.each(buttons, function(btn) {
+				var button = self.make("button", { "class" : btn[1] }, btn[0]);
+				$buttonsP.append(button);
+				$buttonsP.append("&nbsp;");
+			});
+		}
 
 		// If the alert is set to disappear, make it happen
 		if (this.model.get("delay")) {
@@ -333,6 +403,13 @@ App.Exercise = Backbone.Model.extend({
 				undoArray : []
 			});
 		}
+	},
+
+	getCurrentlySelectedStepIdx : function () {
+		if (this.get("currentlySelectedSteps") && this.get("currentlySelectedStep")) {
+			return this.get("currentlySelectedSteps").indexOf(this.get("currentlySelectedStep"));
+		}
+		return null;
 	},
 
 	onChangeSelections: function () {
@@ -460,18 +537,29 @@ App.Exercise = Backbone.Model.extend({
 			idxOfMatchingStep = -1,
 			lastStepFrom,
 			usedSteps = [],
-			self = this;
+			self = this,
+			isPrevSolution;
 
 		oppositeSet.each(function (step, idx) { // Go through each of the steps in opposite set
-			if (step.get("node").toString() === lastAddedStepString) {
+			if (step.get("node").toString() === lastAddedStepString) { // Then we have a match - exercise complete!
 				idxOfMatchingStep = idx;
+			
+				// Display the unused steps
 				lastAddedSteps.showUnusedSteps(lastAddedSteps.length - 1);
 				oppositeSet.showUnusedSteps(idxOfMatchingStep);
-				self.saveCompletedVersion();
-				self.set({ 
-					completed : true,
-					undoAvailable : false
-				});
+				
+				isPrevSolution = Boolean(self.get("completedInputSet"));
+				self.set({ completed : true, undoAvailable : false });
+				
+				// If this is the first solution for this exercise - save the completed version into completed(input/goal)Set
+				// If it isn't the first solution then the alert in ExerciseView asks if they want to overwrite
+				if (!isPrevSolution) { 
+					self.saveCompletedVersion();
+				}
+
+				// Remove all undo steps
+				self.set("undoArray",[]);
+				self.trigger("exerciseCompleted", isPrevSolution); // Triggers the creation of an alert in ExerciseView
 			}
 		});
 	},
@@ -488,8 +576,16 @@ App.Exercise = Backbone.Model.extend({
 			// Set the completed steps to be a copy of those steps that were used
 			self.set(completedSteps, new App.Steps(_.map(usedSteps, function(step) { return step.clone(); })));
 			// Renumber the steps to account for unused steps
-			self.get(completedSteps).renumberSteps();
+			self.get(completedSteps).renumber();
 		});
+
+		// Remove all but the start, finish wff silently.
+		this.silentReset();
+	},
+
+	silentReset : function () {
+		this.get("inputSet").remove(this.get("inputSet").rest(1), { silent : true });
+		this.get("goalSet").remove(this.get("goalSet").rest(1), { silent : true });
 	},
 
 	// Adds a new step to steps, with newWff as it's node and the rule text and direction it was used in
@@ -582,22 +678,51 @@ App.Exercise = Backbone.Model.extend({
 		}
 	},
 
-	// TODO: make this delete the resulting wffs as well
-	unstack : function () {
-		var lastUndoPos = -1,
-			undoArray = this.get("undoArray");
-		if (this.get("unstackAvailable")) {
-			// Removes the top step from the currently selected step
-			this.get("currentlySelectedSteps").pop();
-			// Need to remove the last reference to this currentlySelectedStep from the undoArray
-			lastUndoPos = _.lastIndexOf(undoArray, this.get("currentlySelectedSteps"));
-			if (lastUndoPos !== -1) {
-				// Remove the element
-				undoArray.splice(lastUndoPos, 1);
-				// If there is nothing else in the undoArray disable the undo feature.
-				if (undoArray.length === 0) { this.set({ undoAvailable : false }); }
+	unstack : function (idx) {
+		var undoArray = this.get("undoArray"),
+			steps = this.get("currentlySelectedSteps"),
+			stepsString = steps.getStepsString(),
+			i,
+			noSteps = steps.length,
+			j,
+			allStepsIncChildren = steps.findChildSteps(idx),
+			self = this,
+			undoStepToDel,
+			undoStepToDelIdx;
+
+		for (i = noSteps - 1; i >= 0; i--){ // Working backwards through all the steps
+			if (allStepsIncChildren.indexOf(i) >= 0) { // If i is an index of a step that needs to be deleted.
+
+				// Remove the step
+				steps.remove(steps.at(i)); 
+				noSteps--; 
+				// Walk forward through all of the steps that were in front of this one
+				for (j = i; j < noSteps; j++) {
+					steps.at(j).set("no", steps.at(j).get("no") - 1); // minus one from the number and the from
+				}
+
+				// Find the undoStep that held the step that was removed
+				undoStepToDel =  _.find(undoArray, function (undoStep) { 
+					return undoStep[1] === i && undoStep[0] === stepsString 
+				});
+				// Get the index of the deleted undo step.
+				undoStepToDelIdx = undoArray.indexOf(undoStepToDel);
+				// Delete the undo step
+				undoArray.splice(undoStepToDelIdx,1);
+
+				// For all the undo steps past the deleted one, on this side, minus one from the i.
+				for (j = undoStepToDelIdx; j < undoArray.length; j++) {
+					if (undoArray[j][0] === stepsString) {
+						undoArray[j][1]--;
+					}
+				}
+
+				this.set({
+					undoAvailable : (undoArray.length > 0 ? true : false)
+				})
+
+				this.deselectEqRuleAndNode();
 			}
-			this.deselectEqRuleAndNode();
 		}
 	},
 
@@ -609,6 +734,7 @@ App.Exercise = Backbone.Model.extend({
 		json.currentlySelectedStep = null;
 		json.currentlySelectedNode = null;
 		json.currentlySelectedEqRule = null;
+		json.unstackAvailable = false;
 		return json;
 	},
 
@@ -618,21 +744,20 @@ App.Exercise = Backbone.Model.extend({
 }, {
 
 	parse : function (exJSON) {
-		exJSON.inputSet = new App.Steps(
-			_.map(exJSON.inputSet, function (step) {
-				step.node = App.parser.parse(step.node);
-				return new App.Step(step);
-			})
-		);
-
-		exJSON.goalSet = new App.Steps(
-			_.map(exJSON.goalSet, function (step) {
-				step.node = App.parser.parse(step.node);
-				return new App.Step(step);
-			})
-		);
-
+		exJSON.inputSet = App.Exercise.stepArrayToSteps(exJSON.inputSet); 
+		exJSON.goalSet = App.Exercise.stepArrayToSteps(exJSON.goalSet);
+		exJSON.completedInputSet = App.Exercise.stepArrayToSteps(exJSON.completedInputSet);
+		exJSON.completedGoalSet = App.Exercise.stepArrayToSteps(exJSON.completedGoalSet);
 		return exJSON;
+	},
+
+	stepArrayToSteps : function (stepArr) {
+		return new App.Steps(
+			_.map(stepArr, function (step) {
+				step.node = App.parser.parse(step.node);
+				return new App.Step(step);
+			})
+		);
 	}
 });
 
@@ -644,6 +769,8 @@ App.ExerciseView = Backbone.View.extend({
 	events : {
 		"click .btn-undo" : "onUndoClick",
 		"click .btn-unstack" : "onUnstackClick",
+		"mouseenter .btn-unstack" : "onUnstackMouseenter",
+		"mouseleave .btn-unstack" : "onUnstackMouseleave",
 		"click .inputSetWrite" : "onInputSetWrite",
 		"click .goalSetWrite" : "onGoalSetWrite"
 	},
@@ -661,8 +788,7 @@ App.ExerciseView = Backbone.View.extend({
 		// that isn't applicable to the selected node.
 		this.model.on("alertEqRuleNotApplicable", this.onEqRuleNotApplicable, this);
 
-		// Bind to the Exercise's completed member changing.
-		this.model.on("change:completed", this.onChangeCompleted, this);
+		this.model.on("exerciseCompleted", this.createCompletedAlert, this);
 
 		// Bind to the Exercise's undo and unstack availablity members changing.
 		this.model.on("change:undoAvailable", this.onChangeUndoAvailable, this);
@@ -675,7 +801,7 @@ App.ExerciseView = Backbone.View.extend({
 
 		// Bind to centralised hub event that is triggered by the EquivalenceRuleView that has been
 		// clicked on to select a certain eq rule.
-		App.vent.bind("currentlySelectedEqRuleChange", this.onEqRuleSelected, this);
+		App.vent.on("currentlySelectedEqRuleChange", this.onEqRuleSelected, this);
 
 		this.$el.html(renderedContent);
 		// Render the input set
@@ -688,38 +814,40 @@ App.ExerciseView = Backbone.View.extend({
 			.append("<div class=\"goalSetWrite\"><i class=\"icon-edit\"></i> <span>Write next step</span></div>");
 
 		this.$el.append(this.goalSetView.render().$el);
-		// renders a exercise complete message if you are coming back to a completed exercise
-		this.onChangeCompleted();
+
+		this.$('.btn-unstack').tooltip({
+			title : "This will remove all steps highlighted in red. Be warned - this cannot be undone.",
+			placement : "bottom",
+			trigger : "manual"
+		});
+
 		return this;
 	},
 
 	onNodeSelected: function (nodeView, step, steps) {
-		if (!this.model.get("completed")) {
-			// Only let the user click on a node if the exercise hasn't been completed.
-			if (!nodeView.model.get("selected")) {
-				// If the node clicked on isn't the one that's currently selected.
+		if (!nodeView.model.get("selected")) {
+			// If the node clicked on isn't the one that's currently selected.
 
-				// If there is a node selected, deselect it.
-				if (this.model.get("currentlySelectedNode")) {
-					this.model.deselectNode();
-				}
-
-				// Set this node to selected and keep a records of currently selected in the 
-				// Exercise
-
-				nodeView.model.set({ selected: true });
-				this.model.set({
-					currentlySelectedNode: nodeView.model,
-					currentlySelectedStep: step,
-					currentlySelectedSteps: steps
-				});
-
-				this.model.trigger("changeCurrentlySelectedNodeEtc");
-			} else {
-				// The node was previously selected and has been clicked so deselect it!
-				// Update the node and the record in the Exercise.
+			// If there is a node selected, deselect it.
+			if (this.model.get("currentlySelectedNode")) {
 				this.model.deselectNode();
 			}
+
+			// Set this node to selected and keep a records of currently selected in the 
+			// Exercise
+
+			nodeView.model.set({ selected: true });
+			this.model.set({
+				currentlySelectedNode: nodeView.model,
+				currentlySelectedStep: step,
+				currentlySelectedSteps: steps
+			});
+
+			this.model.trigger("changeCurrentlySelectedNodeEtc");
+		} else {
+			// The node was previously selected and has been clicked so deselect it!
+			// Update the node and the record in the Exercise.
+			this.model.deselectNode();
 		}
 	},
 
@@ -762,26 +890,55 @@ App.ExerciseView = Backbone.View.extend({
 		this.$(".answerSection").eq(0).after(newAlertView.render().$el);
 	},
 
-	onChangeCompleted: function () {
-		if (this.model.get("completed")) {
-			// Create an alert view to inform the user they've completed
-			var successAlertView = new App.AlertView({
-					model : new App.Alert({
-						heading: "Exercise Complete",
-						body: "You have successfully completed the exercise",
-						type: "alert-success", // green for success
-						closable: false,
-						delay: false
-					})
-				});
+	createCompletedAlert : function (isPrevSolution) {
+		var self = this;
 
-			// Place the alert inbetween the 2 answer sections (input set and goal set)
-			this.$(".answerSection").eq(0).after(successAlertView.render().$el);
-			this.$('.writeBtns').addClass("hide");
-		} else {
-			this.$(".alert-success").remove();
-			this.$('.writeBtns').removeClass("hide");
+		if (!isPrevSolution) {
+			this.successAlertView = new App.AlertView({
+				model : new App.Alert({
+					heading : "Exercise Complete",
+					body : "You have successfully completed the exercise. Any unused steps have been crossed out. The solution has been saved and can be accessed by clicking the eye next to the exercise.",
+					type : "alert-success", // green for success
+					closable : false,
+					delay : false		
+				})
+			});
+		} else { // Create an alert view that gives the user the option to save this new solution.
+			this.successAlertView = new App.AlertView({
+				events : {
+					"click .btn-info" : "overwriteClicked",
+					"click .btn-no" : "noClicked"
+				},
+
+				model : new App.Alert({
+					heading : "Exercise Completed Again",
+					body : "You have successfully completed the exercise again. Would you like to overwrite your previous solution?",
+					type : "alert-info", // blue for success
+					closable : false,
+					delay : false,
+					buttons : [["Overwrite", "btn btn-info"], ["No thanks.", "btn btn-no"]]
+					// [btn text, btn classes]
+				}),
+
+				overwriteClicked : function (e) {
+					// self refers to ExerciseView
+					self.model.saveCompletedVersion();
+					// this refers to the AlertView
+					this.$("p").html("The new solution has been saved.");
+				},
+
+				noClicked : function (e) {
+					// self refers to ExerciseView, just remove the solution for next time
+					self.model.silentReset();
+					// this refers to the AlertView
+					this.$("p").html("The new solution has been discarded.");
+				}
+			});
 		}
+
+		// Place the alert inbetween the 2 answer sections (input set and goal set)
+		this.$(".answerSection").eq(0).after(this.successAlertView.render().$el);
+		this.$('.writeBtns').addClass("hide");
 	},
 
 	onChangeUndoAvailable: function () {
@@ -805,7 +962,32 @@ App.ExerciseView = Backbone.View.extend({
 	},
 
 	onUnstackClick : function () {
-		this.model.unstack();
+		var selectedStepIdx = this.model.getCurrentlySelectedStepIdx();
+		if (selectedStepIdx !== null && selectedStepIdx > -1){
+			this.model.unstack(selectedStepIdx);
+			this.$('.btn-unstack').tooltip("hide");
+		}
+	},
+
+	onUnstackMouseenter : function () {
+		var curSteps = this.model.get("currentlySelectedSteps"),
+			selectedStepIdx = this.model.getCurrentlySelectedStepIdx(),
+			stepIndexes;
+
+		if (selectedStepIdx !== null && selectedStepIdx > -1) {
+			stepIndexes = curSteps.findChildSteps(selectedStepIdx);
+			curSteps.highlightForDel(stepIndexes);
+			this.$('.btn-unstack').tooltip("show");
+		}
+	},
+
+	onUnstackMouseleave : function () {
+		var curSteps = this.model.get("currentlySelectedSteps"),
+			curStepsView = (this.inputSetView.collection === curSteps ? this.inputSetView : this.goalSetView);
+		if (this.model.get("unstackAvailable")) {
+			curSteps.removeDelHighlights();
+			this.$('.btn-unstack').tooltip("hide");
+		}
 	},
 
 	createWriteNextStepModalView : function (set) {
@@ -830,10 +1012,56 @@ App.ExerciseView = Backbone.View.extend({
 	},
 
 	onClose : function () {
+		
 		// Unbind from centralised hub event so that only the one currently displayed receives this update
-		App.vent.unbind("currentlySelectedEqRuleChange", this.onEqRuleSelected);
-	}
+		App.vent.off(null, null, this);
+		// Remove all bindings to model
+		this.model.off();
+		
+		// Remove all bindings to the input and goal StepsViews
+		this.inputSetView.off();
+		this.goalSetView.off();
 
+		// Close the input and goal StepsViews
+		this.inputSetView.close();
+		this.goalSetView.close();
+
+		if (this.successAlertView) { // If there is a success alert view
+			if (this.successAlertView.$(".btn-no").length > 0) {
+				this.successAlertView.$(".btn-no").click();
+			}
+		}
+
+		console.log("Closed ExerciseView");
+	}
+});
+
+App.SolutionView = Backbone.View.extend({
+
+	template : _.template($("#solutionTemplate").html()),
+
+	initialize: function () {
+		// Create the input set and goal set
+		this.inputSetView = new App.StepsView({ collection: this.model.get("completedInputSet"), backwards: false });
+		this.goalSetView = new App.StepsView({ collection: this.model.get("completedGoalSet"), backwards: true });
+	},
+
+	render: function () {
+		var renderedContent = this.template(this.model.toJSON());
+
+		this.$el.html(renderedContent);
+		// Render the input set
+		this.$el.append(this.inputSetView.render().$el);
+		this.$el.append(this.goalSetView.render().$el);
+
+		return this;
+	},
+
+	onClose : function () {
+		// Close the input and goal StepsViews
+		this.inputSetView.close();
+		this.goalSetView.close();
+	}
 });
 
 App.Exercises = Backbone.Collection.extend({
@@ -843,7 +1071,13 @@ App.Exercises = Backbone.Collection.extend({
 App.ExerciseListItemView = Backbone.View.extend({
 
 	events : {
-		"click *" : "onClick"
+		"click a" : "onExerciseClick",
+		"click .icon-eye-open" : "onSolutionClick",
+		"mouseenter .icon-eye-open" : "onSolutionMouseenter",
+		"mouseleave .icon-eye-open" : "onSolutionMouseleave",
+		"click .icon-share" : "onAddToEqRulesClick",
+		"mouseenter .icon-share" : "onAddToEqRulesMouseenter",
+		"mouseleave .icon-share" : "onAddToEqRulesMouseleave"
 	},
 
 	tagName: "li",
@@ -852,6 +1086,7 @@ App.ExerciseListItemView = Backbone.View.extend({
 
 	initialize: function () {
 		this.model.on("change:current", this.onCurrentChange, this);
+		this.model.on("change:completed", this.addCompletedBtns, this);
 	},
 
 	render: function () {
@@ -860,11 +1095,32 @@ App.ExerciseListItemView = Backbone.View.extend({
 		});
 
 		this.$el.html(renderedContent);
+		
 		if (this.model.get("current")) {
 			this.$el.addClass("active");
 		}
 
+		if (this.model.get("completed")) {
+			this.addCompletedBtns();
+		}
+
 		return this;
+	},
+
+	addCompletedBtns : function () {
+		this.$el.prepend("<i class=\"pull-right icon-eye-open\"></i><i class=\"pull-right icon-share\"></i>");
+			
+		this.$('.icon-eye-open').tooltip({
+			title : "Open saved solution",
+			placement : "left",
+			trigger : "manual"
+		});
+
+		this.$('.icon-share').tooltip({
+			title : "Add as equivalence rule",
+			placement : "left",
+			trigger : "manual"
+		});
 	},
 
 	onCurrentChange : function () {
@@ -875,11 +1131,61 @@ App.ExerciseListItemView = Backbone.View.extend({
 		}
 	},
 
-	onClick : function (e) {
+	onExerciseClick : function (e) {
 		e.preventDefault();
 		e.stopPropagation();
 		this.trigger("exClicked", this.model);
-	}
+	},
+
+	onSolutionClick : function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		this.trigger("solutionClicked", this.model);
+	},
+
+	onSolutionMouseenter : function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		this.$('.icon-eye-open').tooltip("show");
+	},
+
+	onSolutionMouseleave : function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		this.$('.icon-eye-open').tooltip("hide");
+	},
+
+	onAddToEqRulesClick : function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		var newEqRuleView = new App.NewEqRuleModalView({
+			model: new App.NewEqRuleModal({
+				"collection": App.equivalenceRules,
+				"Left Hand Side" : this.model.get("inputSet").at(0).get("node").toString(),
+				"Right Hand Side" : this.model.get("goalSet").at(0).get("node").toString()
+			})
+		});
+
+		newEqRuleView.render();
+	},
+
+	onAddToEqRulesMouseenter : function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		this.$('.icon-share').tooltip("show");
+	},
+
+	onAddToEqRulesMouseleave : function (e) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		this.$('.icon-share').tooltip("hide");
+	},
 });
 
 App.ExercisesListView = Backbone.View.extend({
@@ -889,8 +1195,10 @@ App.ExercisesListView = Backbone.View.extend({
 		this.collection.on("remove", this.onRemove, this);
 		this.collection.on("reset", this.onReset, this);
 		this.$exerciseView = $("#exercise-view");
-		this.currentExercise = false;
-		this.currentExerciseView = false;
+		this.currentExercise = null;
+		this.currentExerciseView = null;
+		this.currentSolution = null;
+		this.currentSolutionView = null;
 		this.exViewModelPairs = [];
 	},
 
@@ -901,6 +1209,7 @@ App.ExercisesListView = Backbone.View.extend({
 				});
 
 		exLiView.bind("exClicked", this.onExClicked, this);
+		exLiView.bind("solutionClicked", this.onSolutionClicked, this);
 		this.exViewModelPairs.push([exLiView, exercise]);
 		this.$el.append(exLiView.render().el);
 	},
@@ -936,16 +1245,39 @@ App.ExercisesListView = Backbone.View.extend({
 		}
 	},
 
+	closeCurrentExercise : function () {
+		this.currentExercise.deselectEqRuleAndNode();
+		this.currentExerciseView.close();
+		this.currentExercise.set({ current: false });
+
+		// Only save the exercise if it belongs to a user.
+		if (!this.currentExercise.isNew()) {
+			this.currentExercise.save();
+		}
+
+		this.currentExercise = null;
+		this.currentExerciseView = null;
+	},
+
+	closeCurrentSolution : function () {
+		this.currentSolutionView.close();
+		this.currentSolution.set({ current : false });
+
+		this.currentSolution = null;
+		this.currentSolutionView = null;
+	},
+
+	closeWhateverCurrent : function () {
+		if (this.currentExercise) { // if there is an exercise open, close it.
+			this.closeCurrentExercise();
+		} else if (this.currentSolution) { // if there is a solution open, close it.
+			this.closeCurrentSolution();
+		}
+	},
+
 	onExClicked : function (exercise) {
 		if (exercise !== this.currentExercise) {
-			this.currentExercise.deselectEqRuleAndNode();
-			this.currentExerciseView.close();
-			this.currentExercise.set({ current: false });
-			
-			// Only save the exercise if it belongs to a user.
-			if (!this.currentExercise.isNew()) {
-				this.currentExercise.save();
-			}
+			this.closeWhateverCurrent();
 
 			exercise.set({ current: true });
 			this.currentExercise = exercise;
@@ -956,6 +1288,19 @@ App.ExercisesListView = Backbone.View.extend({
 		}
 	},
 
+	onSolutionClicked : function (exercise) {
+		if (exercise !== this.currentSolution) { // only do something if not currently looking at this solution
+			this.closeWhateverCurrent();
+
+			exercise.set({ current: true });
+			this.currentSolution = exercise;
+			this.currentSolutionView = new App.SolutionView({
+				model : exercise
+			});
+			
+			this.$exerciseView.html(this.currentSolutionView.render().$el);
+		}
+	},
 
 	// TODO: This function may well be useless - along with the "remove" event
 	// Apart from if we want to let users delete exercises?
@@ -984,8 +1329,8 @@ App.ExercisesListView = Backbone.View.extend({
 
 		// Empty the current exercise view
 		this.$exerciseView.empty();
-		this.currentExercise = false;
-		this.currentExerciseView = false;
+		this.currentExercise = null;
+		this.currentExerciseView = null;
 	}
 });
 
@@ -1026,15 +1371,9 @@ App.ExerciseManager = Backbone.Model.extend({
 	},
 
 	onUserLoggedIn : function () {
-		var self = this,
-			unsavedEqRules = this.get("exercises").rest(35);
+		var self = this;
 
-		// TODO: replace this with a button that lets the user save individual exercises
-		// This button should be visible on everything but the current exercise.
-		/*
-		this.get("exercises").each( function(ex) {
-			ex.save();
-		});*/
+		this.get("exercises").reset();
 
 		$.ajax({
 			
@@ -1067,8 +1406,8 @@ App.ExerciseManager = Backbone.Model.extend({
 
 	onUserLoggingOut : function () {
 		if (App.exercisesListView.currentExercise) {
-			App.exercisesListView.currentExercise.save(); // Save the current exercise
 			App.exercisesListView.currentExerciseView.close();
+			App.exercisesListView.currentExercise.save(); // Save the current exercise after closing
 			this.get("exercises").reset(); // Delete all the exercises
 		}
 	}
