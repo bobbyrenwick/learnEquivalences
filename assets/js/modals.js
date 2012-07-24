@@ -362,10 +362,11 @@ App.NewEqRuleModalView = App.ModalView.extend({
 			// Check the equivalence and if they're equivalent, add the exercise
 			if (this.equivalenceChecker.testEquivalence(this.model.get("lhsWff"), this.model.get("rhsWff"))) {
 				this.model.get("collection").add({
-					category: "User Equivalences",
-					lhsTrees: [this.model.get("lhsWff")],
-					rhsTrees: [this.model.get("rhsWff")],
-					bidirectional: this.$("[name=\"bidirectionalCheckbox\"]").prop("checked")
+					category : "User Equivalences",
+					lhsTrees : [this.model.get("lhsWff")],
+					rhsTrees : [this.model.get("rhsWff")],
+					bidirectional : this.$("[name=\"bidirectionalCheckbox\"]").prop("checked"),
+					fromExercise : this.model.get("fromExercise")
 				});
 				this.close();
 			} else {

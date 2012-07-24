@@ -100,6 +100,11 @@ li.answerStep small {
 	padding: 9px 15px;
 }
 
+#eqRulesList i {
+	cursor : pointer;
+	margin-top: 5px;
+}
+
 .nav-header:hover {
 	color: #888;
 }

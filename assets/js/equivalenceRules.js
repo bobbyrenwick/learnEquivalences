@@ -351,16 +351,33 @@ App.EquivalenceRuleView = Backbone.View.extend({
 	template: _.template($("#equivalenceRuleTemplate").html()),
 
 	events: {
-		"click *": "onEqRuleClick"
+		"click a": "onEqRuleClick",
+		"mouseenter i" : "onSolutionMouseenter",
+		"mouseleave i" : "onSolutionMouseleave",
+		"click i" : "onSolutionClick"
 	},
 
 	initialize: function () {
-		this.model.bind("change:active", this.onActiveChange, this);
+		this.model.on("change:active", this.onActiveChange, this);
 	},
 
 	render: function () {
-		var renderedContent = this.template(this.model.toJSON());
+		var renderedContent = this.template(this.model.toJSON()),
+			proofBtn;
+		
 		this.$el.html(renderedContent);
+		
+		if (this.model.get("fromExercise") !== undefined) {
+			proofBtn = this.make("i", { "class" : "pull-right icon-eye-open" }, "");
+			this.$el.prepend(proofBtn);
+
+			this.$('.icon-eye-open').tooltip({
+				title : "Show proof",
+				placement : "left",
+				trigger : "manual"
+			});
+		}
+
 		return this;
 	},
 
@@ -368,8 +385,7 @@ App.EquivalenceRuleView = Backbone.View.extend({
 		// Stop the URL changing and event bubbling
 		e.preventDefault();
 		e.stopPropagation();
-		// Tell the current exercise that the selected equivalence rule
-		// has changed.
+		// Tell the current exercise that the selected equivalence rule has changed.
 		App.vent.trigger("currentlySelectedEqRuleChange", this.model);
 	},
 
@@ -380,6 +396,22 @@ App.EquivalenceRuleView = Backbone.View.extend({
 		} else {
 			this.$el.removeClass("active");
 		}
+	},
+
+	onSolutionClick : function () {
+		App.vent.trigger("eqRuleSolutionClick", this.model.get("fromExercise"));
+	},
+
+	onSolutionMouseleave : function () {
+		this.$('.icon-eye-open').tooltip("hide");
+	},
+
+	onSolutionMouseenter : function () {
+		this.$('.icon-eye-open').tooltip("show");
+	},
+
+	onClose : function () {
+		this.model.off(null, null, this);
 	}
 });
 
@@ -394,10 +426,10 @@ App.EquivalenceRulesView = Backbone.View.extend({
 		this.collection.on("remove", this.removeEqRule, this);
 
 		// Bind to Users Logging In
-		App.vent.bind("userLoggedIn", this.onUserLoggedIn, this);
+		App.vent.on("userLoggedIn", this.onUserLoggedIn, this);
 
 		// Bind to users about to log out - save all eq rules.
-		App.vent.bind("userLoggingOut", this.onUserLoggingOut, this);
+		App.vent.on("userLoggingOut", this.onUserLoggingOut, this);
 
 		// An array to hold EquivalenceRuleViews
 		this.eqRuleViewModelPairs = [];
@@ -479,6 +511,10 @@ App.EquivalenceRulesView = Backbone.View.extend({
 	},
 
 	onUserLoggingOut : function () {
+		var unsavedEqRules = _.filter(this.collection.rest(35), function (eqRule) { return eqRule.isNew(); })
+		// Have to save synchronously to work when refreshing
+		_.each(unsavedEqRules, function (eqRule) { eqRule.save({},{ async : false }); }); 
+
 		// Remove all eqRules from this.collection past the default rules
 		this.collection.remove(this.collection.rest(35));
 	},
@@ -493,7 +529,7 @@ App.EquivalenceRulesView = Backbone.View.extend({
 		});
 
 		// Remove the view from the DOM
-		pairToRemove[0].remove();
+		pairToRemove[0].close();
 
 		// Remove the view, eqRule pair from the array 
 		this.eqRuleViewModelPairs = _.without(this.eqRuleViewModelPairs, pairToRemove);

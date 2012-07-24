@@ -240,7 +240,7 @@ App.StepsView = Backbone.View.extend({
 		});
 
 		// Remove the view from the DOM
-		pairToRemove[0].remove();
+		pairToRemove[0].close();
 
 		// Remove the [view, step] pair from the array 
 		this.stepViewModelPairs = _.without(this.stepViewModelPairs, pairToRemove);
@@ -793,7 +793,6 @@ App.ExerciseView = Backbone.View.extend({
 		// Bind to the Exercise's undo and unstack availablity members changing.
 		this.model.on("change:undoAvailable", this.onChangeUndoAvailable, this);
 		this.model.on("change:unstackAvailable", this.onChangeUnstackAvailable, this);
-
 	},
 
 	render: function () {
@@ -1016,7 +1015,7 @@ App.ExerciseView = Backbone.View.extend({
 		// Unbind from centralised hub event so that only the one currently displayed receives this update
 		App.vent.off(null, null, this);
 		// Remove all bindings to model
-		this.model.off();
+		this.model.off(null, null, this);
 		
 		// Remove all bindings to the input and goal StepsViews
 		this.inputSetView.off();
@@ -1141,7 +1140,7 @@ App.ExerciseListItemView = Backbone.View.extend({
 		e.preventDefault();
 		e.stopPropagation();
 
-		this.trigger("solutionClicked", this.model);
+		this.trigger("solutionClick", this.model);
 	},
 
 	onSolutionMouseenter : function (e) {
@@ -1162,15 +1161,7 @@ App.ExerciseListItemView = Backbone.View.extend({
 		e.preventDefault();
 		e.stopPropagation();
 
-		var newEqRuleView = new App.NewEqRuleModalView({
-			model: new App.NewEqRuleModal({
-				"collection": App.equivalenceRules,
-				"Left Hand Side" : this.model.get("inputSet").at(0).get("node").toString(),
-				"Right Hand Side" : this.model.get("goalSet").at(0).get("node").toString()
-			})
-		});
-
-		newEqRuleView.render();
+		this.trigger("addToEqRulesClick", this.model);
 	},
 
 	onAddToEqRulesMouseenter : function (e) {
@@ -1186,6 +1177,10 @@ App.ExerciseListItemView = Backbone.View.extend({
 
 		this.$('.icon-share').tooltip("hide");
 	},
+
+	onClose : function () {
+		this.model.off(null, null, this);
+	}
 });
 
 App.ExercisesListView = Backbone.View.extend({
@@ -1194,6 +1189,10 @@ App.ExercisesListView = Backbone.View.extend({
 		this.collection.on("add", this.onAdd, this);
 		this.collection.on("remove", this.onRemove, this);
 		this.collection.on("reset", this.onReset, this);
+
+		// Bind to the event that a user's equivalence rule.
+		App.vent.on("eqRuleSolutionClick", this.onEqRuleSolutionClick, this);
+		
 		this.$exerciseView = $("#exercise-view");
 		this.currentExercise = null;
 		this.currentExerciseView = null;
@@ -1204,12 +1203,14 @@ App.ExercisesListView = Backbone.View.extend({
 
 	renderExListItemView : function (exercise) {
 		var exLiView = new App.ExerciseListItemView({
-					model : exercise,
-					collection : self
-				});
+				model : exercise,
+				collection : self
+			});
 
-		exLiView.bind("exClicked", this.onExClicked, this);
-		exLiView.bind("solutionClicked", this.onSolutionClicked, this);
+		exLiView.on("exClicked", this.onExClicked, this);
+		exLiView.on("solutionClick", this.onSolutionClick, this);
+		exLiView.on("addToEqRulesClick", this.onAddToEqRulesClick, this);
+		
 		this.exViewModelPairs.push([exLiView, exercise]);
 		this.$el.append(exLiView.render().el);
 	},
@@ -1288,7 +1289,7 @@ App.ExercisesListView = Backbone.View.extend({
 		}
 	},
 
-	onSolutionClicked : function (exercise) {
+	onSolutionClick : function (exercise) {
 		if (exercise !== this.currentSolution) { // only do something if not currently looking at this solution
 			this.closeWhateverCurrent();
 
@@ -1302,6 +1303,19 @@ App.ExercisesListView = Backbone.View.extend({
 		}
 	},
 
+	onAddToEqRulesClick : function (exercise) {
+		var newEqRuleView = new App.NewEqRuleModalView({
+			model: new App.NewEqRuleModal({
+				"collection": App.equivalenceRules,
+				"Left Hand Side" : exercise.get("inputSet").at(0).get("node").toString(),
+				"Right Hand Side" : exercise.get("goalSet").at(0).get("node").toString(),
+				"fromExercise" : this.collection.indexOf(exercise)
+			})
+		});
+
+		newEqRuleView.render();
+	},
+
 	// TODO: This function may well be useless - along with the "remove" event
 	// Apart from if we want to let users delete exercises?
 	onRemove : function (exercise) {
@@ -1311,7 +1325,7 @@ App.ExercisesListView = Backbone.View.extend({
 		});
 
 		// Remove the view from the DOM
-		exViewModelPairToRemove[0].remove();
+		exViewModelPairToRemove[0].close();
 
 		// Remove the view, exercise pair from the array 
 		this.exViewModelPairs = _.without(this.exViewModelPairs, exViewModelPairToRemove);
@@ -1321,7 +1335,7 @@ App.ExercisesListView = Backbone.View.extend({
 		// For each of the [view, exercise] pairs
 		_.each(this.exViewModelPairs, function (pair) {
 			// Remove the view from the DOM
-			pair[0].remove()
+			pair[0].close();
 		});
 
 		// There are no longer any [view, exercise] pairs
@@ -1331,6 +1345,10 @@ App.ExercisesListView = Backbone.View.extend({
 		this.$exerciseView.empty();
 		this.currentExercise = null;
 		this.currentExerciseView = null;
+	},
+
+	onEqRuleSolutionClick : function (exerciseIdx) {
+		this.onSolutionClick(this.collection.at(exerciseIdx));
 	}
 });
 
