@@ -222,3 +222,30 @@ label {
 	margin: 0;
 	list-style: none;
 }
+
+/******* TREE VIEW ******/
+
+svg .node rect {
+	fill: #fff;
+	stroke: #444;
+	stroke-width: 1.5px;
+}
+
+svg .node {
+	font: 10px sans-serif;
+}
+
+svg .link {
+	fill: none;
+	stroke: #ccc;
+	stroke-width: 1.5px;
+}
+
+svg text {
+	cursor: default;
+	fll: #333;
+}
+
+svg rect.highlighted {
+	stroke: #ffc40d; /* yellow from bootstrap */
+}

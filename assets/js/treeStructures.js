@@ -411,7 +411,7 @@ App.AnswerNodeView = App.NodeView.extend({
 
 	onClose : function () {
 		if (this.leftView) {
-			this.lefView.close();
+			this.leftView.close();
 		}
 
 		if (this.rightView) {
