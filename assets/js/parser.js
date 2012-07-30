@@ -3,8 +3,8 @@ var App = App || {};
 App.parser = (function(){
 var parser = {trace: function trace() { },
 yy: {},
-symbols_: {"error":2,"expressions":3,"predsentence":4,"EOF":5,"propsentence":6,"\\u00AC":7,"\\u2227":8,"\\u2228":9,"\\u2192":10,"\\u2194":11,"(":12,")":13,"Variable":14,"\\u22A5":15,"\\u22a4":16,"\\u2203":17,"\\u2200":18,"Predicate":19,"listofterms":20,"term":21,",":22,"\\u22A4":23,"Constant":24,"$accept":0,"$end":1},
-terminals_: {2:"error",5:"EOF",7:"\\u00AC",8:"\\u2227",9:"\\u2228",10:"\\u2192",11:"\\u2194",12:"(",13:")",14:"Variable",15:"\\u22A5",16:"\\u22a4",17:"\\u2203",18:"\\u2200",19:"Predicate",22:",",23:"\\u22A4",24:"Constant"},
+symbols_: {"error":2,"expressions":3,"predsentence":4,"EOF":5,"propsentence":6,"\u00AC":7,"\u2227":8,"\u2228":9,"\u2192":10,"\u2194":11,"(":12,")":13,"Variable":14,"\u22A5":15,"\u22a4":16,"\u2203":17,"\u2200":18,"Predicate":19,"listofterms":20,"term":21,",":22,"\u22A4":23,"Constant":24,"$accept":0,"$end":1},
+terminals_: {2:"error",5:"EOF",7:"\u00AC",8:"\u2227",9:"\u2228",10:"\u2192",11:"\u2194",12:"(",13:")",14:"Variable",15:"\u22A5",16:"\u22a4",17:"\u2203",18:"\u2200",19:"Predicate",22:",",23:"\u22A4",24:"Constant"},
 productions_: [0,[3,2],[3,2],[6,2],[6,3],[6,3],[6,3],[6,3],[6,3],[6,1],[6,1],[6,1],[4,2],[4,3],[4,3],[4,3],[4,3],[4,3],[4,3],[4,3],[4,3],[20,1],[20,3],[21,1],[21,1],[21,1],[21,1]],
 performAction: function anonymous(yytext,yyleng,yylineno,yy,yystate,$$,_$) {
 
@@ -68,8 +68,8 @@ break;
 table: [{3:1,4:2,6:3,7:[1,4],12:[1,5],14:[1,9],15:[1,10],16:[1,11],17:[1,6],18:[1,7],19:[1,8]},{1:[3]},{5:[1,12],8:[1,13],9:[1,14],10:[1,15],11:[1,16]},{5:[1,17],8:[1,18],9:[1,19],10:[1,20],11:[1,21]},{4:22,6:23,7:[1,4],12:[1,5],14:[1,9],15:[1,10],16:[1,11],17:[1,6],18:[1,7],19:[1,8]},{4:24,6:25,7:[1,4],12:[1,5],14:[1,9],15:[1,10],16:[1,11],17:[1,6],18:[1,7],19:[1,8]},{14:[1,26]},{14:[1,27]},{14:[1,33],15:[1,31],20:28,21:29,23:[1,30],24:[1,32]},{5:[2,9],8:[2,9],9:[2,9],10:[2,9],11:[2,9],13:[2,9]},{5:[2,10],8:[2,10],9:[2,10],10:[2,10],11:[2,10],13:[2,10]},{5:[2,11],8:[2,11],9:[2,11],10:[2,11],11:[2,11],13:[2,11]},{1:[2,1]},{4:34,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{4:37,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{4:38,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{4:39,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{1:[2,2]},{6:40,7:[1,41],12:[1,42],14:[1,9],15:[1,10],16:[1,11]},{6:43,7:[1,41],12:[1,42],14:[1,9],15:[1,10],16:[1,11]},{6:44,7:[1,41],12:[1,42],14:[1,9],15:[1,10],16:[1,11]},{6:45,7:[1,41],12:[1,42],14:[1,9],15:[1,10],16:[1,11]},{5:[2,12],8:[2,12],9:[2,12],10:[2,12],11:[2,12],13:[2,12]},{5:[2,3],8:[2,3],9:[2,3],10:[2,3],11:[2,3],13:[2,3]},{8:[1,13],9:[1,14],10:[1,15],11:[1,16],13:[1,46]},{8:[1,18],9:[1,19],10:[1,20],11:[1,21],13:[1,47]},{4:48,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{4:49,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{13:[1,50],22:[1,51]},{13:[2,21],22:[2,21]},{13:[2,23],22:[2,23]},{13:[2,24],22:[2,24]},{13:[2,25],22:[2,25]},{13:[2,26],22:[2,26]},{5:[2,13],8:[2,13],9:[2,13],10:[2,13],11:[2,13],13:[2,13]},{4:22,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{4:24,7:[1,35],12:[1,36],17:[1,6],18:[1,7],19:[1,8]},{5:[2,14],8:[1,13],9:[2,14],10:[2,14],11:[2,14],13:[2,14]},{5:[2,15],8:[1,13],9:[1,14],10:[2,15],11:[2,15],13:[2,15]},{5:[2,16],8:[1,13],9:[1,14],10:[1,15],11:[2,16],13:[2,16]},{5:[2,4],8:[2,4],9:[2,4],10:[2,4],11:[2,4],13:[2,4]},{6:23,7:[1,41],12:[1,42],14:[1,9],15:[1,10],16:[1,11]},{6:25,7:[1,41],12:[1,42],14:[1,9],15:[1,10],16:[1,11]},{5:[2,5],8:[1,18],9:[2,5],10:[2,5],11:[2,5],13:[2,5]},{5:[2,6],8:[1,18],9:[1,19],10:[2,6],11:[2,6],13:[2,6]},{5:[2,7],8:[1,18],9:[1,19],10:[1,20],11:[2,7],13:[2,7]},{5:[2,17],8:[2,17],9:[2,17],10:[2,17],11:[2,17],13:[2,17]},{5:[2,8],8:[2,8],9:[2,8],10:[2,8],11:[2,8],13:[2,8]},{5:[2,18],8:[2,18],9:[2,18],10:[2,18],11:[2,18],13:[2,18]},{5:[2,19],8:[2,19],9:[2,19],10:[2,19],11:[2,19],13:[2,19]},{5:[2,20],8:[2,20],9:[2,20],10:[2,20],11:[2,20],13:[2,20]},{14:[1,33],15:[1,31],21:52,23:[1,30],24:[1,32]},{13:[2,22],22:[2,22]}],
 defaultActions: {12:[2,1],17:[2,2]},
 parseError: function parseError(str, hash) {
-    throw new Error(str);
-},
+        throw { message: str, charPosition: hash.charPosition };
+    },
 parse: function parse(input) {
     var self = this,
         stack = [0],
@@ -143,14 +143,14 @@ parse: function parse(input) {
                     expected.push("'"+this.terminals_[p]+"'");
                 }
                 if (this.lexer.showPosition) {
-                    errStr = 'Parse error on line '+(yylineno+1)+":\n"+this.lexer.showPosition()+"\nExpecting "+expected.join(', ') + ", got '" + (this.terminals_[symbol] || symbol)+ "'";
-                } else {
-                    errStr = 'Parse error on line '+(yylineno+1)+": Unexpected " +
-                                  (symbol == 1 /*EOF*/ ? "end of input" :
-                                              ("'"+(this.terminals_[symbol] || symbol)+"'"));
-                }
+                        errStr = 'Parse error at character '+(this.lexer.charPosition())+":<br />Expecting "+expected.join(', ') + ", got '" + (this.terminals_[symbol] || symbol)+ "'";
+                    } else {
+                        errStr = 'Parse error at character '+(this.lexer.charPosition())+": Unexpected " +
+                        (symbol == 1 /*EOF*/ ? "end of input" :
+                            ("'"+(this.terminals_[symbol] || symbol)+"'"));
+                    }
                 this.parseError(errStr,
-                    {text: this.lexer.match, token: this.terminals_[symbol] || symbol, line: this.lexer.yylineno, loc: yyloc, expected: expected});
+                    {text: this.lexer.match, token: this.terminals_[symbol] || symbol, line: this.lexer.yylineno, loc: yyloc, expected: expected, charPosition: this.lexer.charPosition()});
             }
 
             // just recovered from another error
@@ -352,6 +352,11 @@ showPosition:function () {
         var c = new Array(pre.length + 1).join("-");
         return pre + this.upcomingInput() + "\n" + c+"^";
     },
+// Added by Bob Renwick for returning custom errors
+charPosition:function () {
+    var pre = this.pastInput();
+    return pre.length+1;
+},
 next:function () {
         if (this.done) {
             return this.EOF;
@@ -402,8 +407,8 @@ next:function () {
         if (this._input === "") {
             return this.EOF;
         } else {
-            return this.parseError('Lexical error on line '+(this.yylineno+1)+'. Unrecognized text.\n'+this.showPosition(),
-                    {text: "", token: null, line: this.yylineno});
+            return this.parseError('Lexical error at character '+ this.charPosition() + '. Unrecognized text.',
+                {text: "", token: null, line: this.yylineno, charPosition: this.charPosition() });
         }
     },
 lex:function lex() {
