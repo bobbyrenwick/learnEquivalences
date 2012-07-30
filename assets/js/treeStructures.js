@@ -48,6 +48,22 @@ App.Node = Backbone.Model.extend({
 	}
 });
 
+App.Predicate = App.Node.extend({
+	defaults : {
+		truth : false,
+		precedence : 10000,
+	},
+
+	initialize : function () {
+		// do nothing
+	},
+
+	toString : function () {
+		return this.get("symbol") + "(" + this.get("terms").join(", ") + ")";
+	}
+
+});
+
 App.Constant = App.Node.extend({
 
 	defaults : {
@@ -56,7 +72,7 @@ App.Constant = App.Node.extend({
 		left : null,
 		right : null,
 		selected : false
-	}
+	},
 
 	// As getAtoms is used for checking equivalence by manipulating the
 	// truth values of the atoms, constants don't need to be included.
@@ -89,19 +105,19 @@ App.Tautology = App.Constant.extend({
 
 App.UnaryNode = App.Node.extend({
 	toString: function () {
-		var stringBuilder = [],
+		var str = "",
 			rightLower = this.get("right").get("precedence") < this.get("precedence");
 
-		stringBuilder.push(this.get("symbol"));
+		str += this.get("symbol");
 		if (rightLower) {
-			stringBuilder.push("(");
+			str += "(";
 		}
-		stringBuilder.push(this.get("right").toString());
+		str += this.get("right").toString();
 		if (rightLower) {
-			stringBuilder.push(")");
+			str += ")";
 		}
 
-		return stringBuilder.join("");
+		return str;
 	},
 
 	getAtoms: function (arr) {
@@ -127,6 +143,50 @@ App.UnaryNode = App.Node.extend({
 		this.get("right").getSubFormulae(arr);
 		return;
 	}
+});
+
+App.Quantifier = App.UnaryNode.extend({
+	defaults : {
+		truth : false,
+		precedence : 9000,
+		left : null,
+		selected : false
+	},
+
+	toString : function () {
+		var str = "",
+			rightIsQuantifier = this.get("right") instanceof App.Quantifier;
+
+		str += this.get("symbol");
+		str += this.get("variable");
+		if (!rightIsQuantifier) {
+			str += "(";
+		}
+		str += this.get("right").toString();
+		if (!rightIsQuantifier) {
+			str += ")";
+		}
+
+		return str;
+	}
+});
+
+App.UniversalQuantifier = App.Quantifier.extend({
+	defaults: {
+		symbol: "∀",
+		precedence: 9000,
+		left: null,
+		selected: false
+	},
+});
+
+App.ExistensialQuantifier = App.Quantifier.extend({
+	defaults: {
+		symbol: "∃",
+		precedence: 9000,
+		left: null,
+		selected: false
+	},
 });
 
 App.NegationNode = App.UnaryNode.extend({
@@ -155,31 +215,31 @@ App.NegationNode = App.UnaryNode.extend({
 
 App.BinaryNode = App.Node.extend({
 	toString: function () {
-		var stringBuilder = [],
+		var str = "",
 			leftNotHigher = this.get("left").get("precedence") <= this.get("precedence"),
 			rightNotHigher = this.get("right").get("precedence") <= this.get("precedence");
 
 		if (leftNotHigher) {
-			stringBuilder.push("(");
+			str += "(";
 		}
-		stringBuilder.push(this.get("left").toString());
+		str += this.get("left").toString();
 		if (leftNotHigher) {
-			stringBuilder.push(")");
+			str += ")";
 		}
 
-		stringBuilder.push(" ");
-		stringBuilder.push(this.get("symbol"));
-		stringBuilder.push(" ");
+		str += " ";
+		str += this.get("symbol");
+		str += " ";
 
 		if (rightNotHigher) {
-			stringBuilder.push("(");
+			str += "(";
 		}
-		stringBuilder.push(this.get("right").toString());
+		str += this.get("right").toString();
 		if (rightNotHigher) {
-			stringBuilder.push(")");
+			str += ")";
 		}
 
-		return stringBuilder.join("");
+		return str;
 	},
 
 	getAtoms: function (arr) {
