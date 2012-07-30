@@ -6,7 +6,9 @@ App.Node = Backbone.Model.extend({
 		precedence: 10000,
 		left: null,
 		right: null,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 
 	initialize: function () { /* do nothing */ },
@@ -51,7 +53,10 @@ App.Node = Backbone.Model.extend({
 App.Predicate = App.Node.extend({
 	defaults : {
 		truth : false,
+		left : null,
 		precedence : 10000,
+		right : null,
+		variable : null
 	},
 
 	initialize : function () {
@@ -60,8 +65,13 @@ App.Predicate = App.Node.extend({
 
 	toString : function () {
 		return this.get("symbol") + "(" + this.get("terms").join(", ") + ")";
-	}
+	},
 
+	toJSON : function () {
+		var json = _.clone(this.attributes);
+		json.terms = _.map(json.terms, function (term) { return term.toString(); }).join(", ");
+		return json;
+	}
 });
 
 App.Constant = App.Node.extend({
@@ -71,7 +81,10 @@ App.Constant = App.Node.extend({
 		precedence : 10000,
 		left : null,
 		right : null,
-		selected : false
+		selected : false,
+		terms : null,
+		variable : null
+
 	},
 
 	// As getAtoms is used for checking equivalence by manipulating the
@@ -88,7 +101,9 @@ App.Contradiction = App.Constant.extend({
 		precedence: 10000,
 		left: null,
 		right: null,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	}
 });
 
@@ -99,7 +114,9 @@ App.Tautology = App.Constant.extend({
 		precedence: 10000,
 		left: null,
 		right: null,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	}
 });
 
@@ -146,13 +163,6 @@ App.UnaryNode = App.Node.extend({
 });
 
 App.Quantifier = App.UnaryNode.extend({
-	defaults : {
-		truth : false,
-		precedence : 9000,
-		left : null,
-		selected : false
-	},
-
 	toString : function () {
 		var str = "",
 			rightIsQuantifier = this.get("right") instanceof App.Quantifier;
@@ -176,7 +186,9 @@ App.UniversalQuantifier = App.Quantifier.extend({
 		symbol: "∀",
 		precedence: 9000,
 		left: null,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 });
 
@@ -185,7 +197,9 @@ App.ExistensialQuantifier = App.Quantifier.extend({
 		symbol: "∃",
 		precedence: 9000,
 		left: null,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 });
 
@@ -194,7 +208,9 @@ App.NegationNode = App.UnaryNode.extend({
 		symbol: "¬",
 		precedence: 9000,
 		left: null,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 
 	truthValue: function () {
@@ -274,7 +290,9 @@ App.AndNode = App.BinaryNode.extend({
 	defaults: {
 		symbol: "∧",
 		precedence: 8000,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 
 	truthValue: function () {
@@ -298,7 +316,9 @@ App.OrNode = App.BinaryNode.extend({
 	defaults: {
 		symbol: "∨",
 		precedence: 7000,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 
 	truthValue: function () {
@@ -322,7 +342,9 @@ App.ImplyNode = App.BinaryNode.extend({
 	defaults: {
 		symbol: "→",
 		precedence: 6000,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 
 	truthValue: function () {
@@ -345,7 +367,9 @@ App.DimplyNode = App.BinaryNode.extend({
 	defaults: {
 		symbol: "↔",
 		precedence: 5000,
-		selected: false
+		selected: false,
+		terms : null,
+		variable : null
 	},
 
 	truthValue: function () {
@@ -482,9 +506,13 @@ App.AnswerNodeView = App.NodeView.extend({
 	clickOnAnswerNode : function(cid) {
 		if (this.model.cid === cid) {
 			this.symbolClick();
-		} else if (this.leftView) {
+		} 
+
+		if (this.leftView) {
 			this.leftView.clickOnAnswerNode(cid);
-		} else if (this.rightView) {
+		}
+
+		if (this.rightView) {
 			this.rightView.clickOnAnswerNode(cid);
 		}
 	}

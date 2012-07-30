@@ -42,6 +42,10 @@ App.toRomanNumerals = function (num) {
 	} else return null;
 }
 
+App.hasLowerCase = function (str) {
+    return str.toUpperCase() != str;
+}
+
 App.init = function () {
 
 	// Setup the equivalence rule view

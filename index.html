@@ -32,7 +32,7 @@
 				if (leftNotHigher) print(")"); 
 			}
 		%>
-		<span class="symbol"><%= symbol %></span>
+		<span class="symbol"><%= symbol %><% if (variable) { print(variable); } else if (terms) { print("("+terms + ")")} %></span>
 		<% 
 			if (right != null) {
 				// If binary node then brackets when rightNotHigher, with unary node, it needs to be strictly less

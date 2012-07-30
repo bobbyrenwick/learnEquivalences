@@ -141,7 +141,7 @@ App.TreeVis.prototype.nodeToTreeViewFmtRecursive = function (node) {
 	var obj = {};
 
 	obj.id = node.cid;
-	obj.name = node.get("symbol");
+	obj.name = node.get("symbol") + (node.get("variable") ? node.get("variable") : "") + (node.get("terms") ? "(" + node.get("terms") + ")" : "");
 
 	if (node.get("left") !== null) {
 		obj.children = []; // create the children array
@@ -172,12 +172,13 @@ App.TreeVis.prototype.updateTree = function() {
 		.style("fill-opacity", 0)
 		.style("stroke-opacity", 0)
     	.on("click", function (d) {
+    		console.log("treeVisNodeClick event triggered", self.set, d.id);
     		App.vent.trigger("treeVisNodeClick", self.set, d.id); // Trigger event that tells the exercise the set and cid of model that should be clicked
     	});
 
     this.nodeEnter.append("rect")
 		.attr("height", 20)
-		.attr("width", function (d) { return 20 + (d.name.length > 1 ? d.name.length * 4.4 : 0); }) // base width of rectangle on length of name to be displayed
+		.attr("width", function (d) { return 20 + (d.name.length > 1 ? d.name.length * 4 : 0); }) // base width of rectangle on length of name to be displayed
 		.attr("transform", function (d) { var dist = -10 + -(d.name.length > 1 ? d.name.length * 2.2 : 0); return "translate("+ dist +",-10)"} ) // move half back
 		.attr("rx", 10)
 		.attr("ry", 10); // round the corners

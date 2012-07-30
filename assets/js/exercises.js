@@ -1399,7 +1399,7 @@ App.ExerciseManager = Backbone.Model.extend({
 		newExerciseView.render();
 	},
 
-	addNewExercise: function (newExStartWff, newExFinishWff) {
+	addNewExercise: function (newExStartWff, newExFinishWff, isPredicate) {
 		this.get("exercises").add([{
 			inputSet : new App.Steps([{
 				node : newExStartWff,
@@ -1415,7 +1415,9 @@ App.ExerciseManager = Backbone.Model.extend({
 				no : 1,
 				from : null,
 				unused : false
-			}])
+			}]),
+
+			predicate : isPredicate
 		}]);
 	},
 

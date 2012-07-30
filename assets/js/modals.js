@@ -686,14 +686,18 @@ App.NewExerciseView = App.ModalView.extend({
 
 		// If we have a starting wff and a finishing wff and there are no parser/user errors add the exercise
 		if (this.finishingWff !== undefined && this.startingWff !== undefined && this.$(".error").length === 0) {
-			// Check the equivalence and if they're equivalent, add the exercise
-			if (this.equivalenceChecker.testEquivalence(this.startingWff, this.finishingWff)) {
-				App.exerciseManager.addNewExercise(this.startingWff, this.finishingWff);
+			if (!this.isPredicateExercise()) { // Check the equivalence and if they're equivalent, add the exercise
+				if (this.equivalenceChecker.testEquivalence(this.startingWff, this.finishingWff)) {
+					App.exerciseManager.addNewExercise(this.startingWff, this.finishingWff, false);
+					this.close();
+				} else {
+					_.each(this.inputViews, function (input) {
+						input.displayError("These two wffs are not equivalent.");
+					});
+				}
+			} else { // We are dealing with a predicate exercise, therefore cannot check equivalence
+				App.exerciseManager.addNewExercise(this.startingWff, this.finishingWff, true);
 				this.close();
-			} else {
-				_.each(this.inputViews, function (input) {
-					input.displayError("These two wffs are not equivalent.");
-				});
 			}
 		}
 	},
@@ -707,6 +711,10 @@ App.NewExerciseView = App.ModalView.extend({
 		} else {
 			this.startingWff = obj.newNode;
 		}
+	},
+
+	isPredicateExercise : function () {
+		return _.reduce(this.inputViews, function(memo, iView) { if(!memo) { return iView.isPredicate() } else { return memo } }, false);
 	}
 });
 
@@ -828,6 +836,10 @@ App.SubFIntroFormBlockView = Backbone.View.extend({
 		this.model.set({
 			error: false
 		});
+	},
+
+	isPredicate: function () {
+		return App.hasLowerCase(this.$("input").val());
 	}
 });
 
