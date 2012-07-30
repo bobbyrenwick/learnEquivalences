@@ -1,80 +1,12 @@
 var App = App || {};
 
-var longTreeData = {
-	"id": 1,
-	"name": "\u2192",
-	"children": [
-		{
-			"id" : 2,
-			"name" : "\u2227",
-			"children" : [
-				{
-					"id" : 3,
-					"name" : "A"
-				},
-				{
-					"id" : 4,
-					"name" : "B"
-				}
-			]
-		},{
-			"id" : 5,
-			"name" : "\u2227",
-			"children" : [
-				{
-					"id" : 6,
-					"name" : "hasOffice(X,Y,Z,L,M,N)"
-				},
-				{
-					"id" : 7,
-					"name" : "hasOffice(X,Y,Z,L,M,N)"
-				}
-			]
-		}
-	]
-};
-
-var longTreeDataChanged = {
-	"id": 1,
-	"name": "\u2192",
-	"children": [
-		{
-			"id" : 2,
-			"name" : "\u2227",
-			"children" : [
-				{
-					"id" : 3,
-					"name" : "A"
-				},
-				{
-					"id" : 4,
-					"name" : "B"
-				}
-			]
-		},{
-			"id" : 5,
-			"name" : "\u2227",
-			"children" : [
-				{
-					"id" : 8,
-					"name" : "C"
-				},
-				{
-					"id" : 7,
-					"name" : "hasOffice(X,Y,Z,L,M,N)"
-				}
-			]
-		}
-	]
-};
-
-// default svg id is chart
-App.TreeVis = function (data, svgid, width, height) {
+App.TreeVis = function (data, set, width, height) {
 
 	this.width = width;
 	this.height = height;
 	this.data = data;
-	this.svgid = "#" + svgid;
+	this.set = set;
+	this.svgid = "#" + set + "TreeView";
 
 	// Create the new descendantsLookup obj
 	this.descendantsLookup = {};
@@ -83,7 +15,9 @@ App.TreeVis = function (data, svgid, width, height) {
 	this.tree = d3.layout.tree()
 			.size([this.width, this.height - 30])
 			.separation(function (a,b) {
-				return a.parent == b.parent ? Math.max(1, Math.floor((b.name.length + a.name.length)/13)) : 2;
+				if (a.name && b.name) {	
+					return a.parent == b.parent ? Math.max(1, Math.floor((b.name.length + a.name.length)/13)) : 2;
+				} else return 1;
 			});
 
 	this.diagonal = d3.svg.diagonal();
@@ -92,9 +26,14 @@ App.TreeVis = function (data, svgid, width, height) {
 			.attr("width", this.width)
 			.attr("height", this.height)
 			.append("g")
-			.attr("transform", "translate(-25, 15)"); //shifts everything down in g by 40px and to the left by 25px
+			.attr("transform", "translate(0, 15)"); //shifts everything down in g by 40px and to the left by 25px
 
-	this.updateTree();
+	if(!$.isEmptyObject(this.data)) { // If there isn't any data, don't make the tree.
+		this.updateTree();
+	}
+
+	App.vent.on("closedExerciseView", this.clear, this);
+		
 };
 
 App.TreeVis.prototype.resizeSvg = function (width, height) {
@@ -105,7 +44,9 @@ App.TreeVis.prototype.resizeSvg = function (width, height) {
 	this.tree = d3.layout.tree()
 			.size([this.width, this.height - 30])
 			.separation(function (a,b) {
-				return a.parent == b.parent ? Math.max(1, Math.floor((b.name.length + a.name.length)/13)) : 2;
+				if (a.name && b.name) {	
+					return a.parent == b.parent ? Math.max(1, Math.floor((b.name.length + a.name.length)/13)) : 2;
+				} else return 1;
 			});
 
 	this.vis = d3.select(this.svgid + ">svg")
@@ -113,18 +54,53 @@ App.TreeVis.prototype.resizeSvg = function (width, height) {
 		.attr("height", this.height)
 		.select("g");
 
-	this.updateTree();
+	if(!$.isEmptyObject(this.data)) {
+		this.updateTree();
+	}
 
+	return this;
 }
 
 App.TreeVis.prototype.updateData = function (newData) {
-	this.data = newData;
-	// Create the new descendantsLookup obj
-	this.descendantsLookup = {};
-	this.createDescendantLookup(this.data,[]);
+	var newTreeVisData = this.stepToTreeViewFmt(newData);
+	
+	if(!$.isEmptyObject(newTreeVisData) && !this.isSameData(newTreeVisData)) {
+		this.data = newTreeVisData;
+		// Create the new descendantsLookup obj
+		this.descendantsLookup = {};
+		this.createDescendantLookup(this.data,[]);
 
-	this.removeAllHighlights();
-	this.updateTree();
+		// if there are currently any nodes, unhighlight them
+		if (this.nodes) { this.removeAllHighlights(); }
+			
+		this.updateTree();
+	}
+
+	return this;
+};
+
+App.TreeVis.prototype.isSameData = function (newData) {
+	if ($.isEmptyObject(this.data) && !$.isEmptyObject(newData)) return false;
+	return this.isSameDataRecursive(this.data, newData);
+}
+
+App.TreeVis.prototype.isSameDataRecursive = function (curData, newData) {
+	var noCurDataChildren = 0,
+		i;
+
+	if (curData.children) {
+		noCurDataChildren = curData.children.length;
+		if (!newData.children || newData.children.length !== noCurDataChildren) { return false; }
+	}
+
+	if (curData.id === newData.id && curData.name === newData.name) {
+		
+		for (i = 0; i < noCurDataChildren; i++) {
+			if (!this.isSameDataRecursive(curData.children[i], newData.children[i])) { return false; }
+		}
+		return true;
+	}
+	return false;
 };
 
 // Go through the data and create id : [all descendant ids] within this.descendantsLookup
@@ -158,7 +134,7 @@ App.TreeVis.prototype.isDescendantOf = function (a, b) {
 
 // Functions for converting from a Backbone step into the format required by d3
 App.TreeVis.prototype.stepToTreeViewFmt = function (step) {
-	return App.TreeVis.nodeToTreeViewFmtRecursive(step.get("node"));
+	return this.nodeToTreeViewFmtRecursive(step.get("node"));
 };
 
 App.TreeVis.prototype.nodeToTreeViewFmtRecursive = function (node) {
@@ -169,12 +145,12 @@ App.TreeVis.prototype.nodeToTreeViewFmtRecursive = function (node) {
 
 	if (node.get("left") !== null) {
 		obj.children = []; // create the children array
-		obj.children.push(App.TreeVis.nodeToTreeViewFmtRecursive(node.get("left")));
+		obj.children.push(this.nodeToTreeViewFmtRecursive(node.get("left")));
 	}
 
 	if (node.get("right") !== null) {
 		obj.children = obj.children || []; // create children array if no left
-		obj.children.push(App.TreeVis.nodeToTreeViewFmtRecursive(node.get("right")));
+		obj.children.push(this.nodeToTreeViewFmtRecursive(node.get("right")));
 	}
 
 	return obj;
@@ -196,7 +172,7 @@ App.TreeVis.prototype.updateTree = function() {
 		.style("fill-opacity", 0)
 		.style("stroke-opacity", 0)
     	.on("click", function (d) {
-    		self.highlightFromId(d.id);
+    		App.vent.trigger("treeVisNodeClick", self.set, d.id); // Trigger event that tells the exercise the set and cid of model that should be clicked
     	});
 
     this.nodeEnter.append("rect")
@@ -258,10 +234,19 @@ App.TreeVis.prototype.highlightFromId = function (id) {
 	this.node.each(function(o) {
 		d3.select(this).select("rect").classed("highlighted", self.isDescendantOf(o.id, id));
 	});
+	return this;
 };
 
 App.TreeVis.prototype.removeAllHighlights = function () {
 	this.node.each(function(o){
 		d3.select(this).select("rect").classed("highlighted", false);
 	});
+	return this;
 };
+
+App.TreeVis.prototype.clear = function () {
+	this.node.remove();
+	this.nodeEnter.remove();
+	this.nodeExit.remove();
+	this.link.remove();
+}

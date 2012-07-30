@@ -13,7 +13,7 @@ body {
 	cursor: pointer;
 }
 
-#mainAppRow > div {
+#mainAppRow > div, #mainContent {
 	height: 100%;
 }
 
@@ -76,17 +76,6 @@ li.answerStep small {
 .text-block {
 	margin-top: 5px;
 	margin-bottom: 0;
-}
-
-#exercises-view {
-	height: 650px;
-	-webkit-box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
-	   -moz-box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
-	        box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
-}
-
-.inner-padding-left {
-	padding-left: 10px;
 }
 
 #eqRulesListContainer {
@@ -156,27 +145,6 @@ label {
 	margin-top: 5px;
 }
 
-
-/***** EXERCISE LIST VIEW *****/
-
-#exercisesListView {
-	list-style:none;
-	margin: 0;
-}
-
-.exerciseListItem {
-	line-height: 18px;
-	font-size: 14px;
-	text-rendering: optimizelegibility;
-	margin: 2px 0;
-}
-
-.exerciseListItem i {
-	margin-top: 2px;
-	margin-left: 5px;
-	cursor: pointer;
-}
-
 /***** LOGIN DROPDOWN *****/
 
 #loginDropdown {
@@ -225,6 +193,22 @@ label {
 
 /******* TREE VIEW ******/
 
+#treeVisView {
+	-webkit-box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
+	   -moz-box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
+	        box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
+	padding-left: 10px;
+	height: 100%;
+}
+
+.inner-padding-left {
+	padding-left: 10px;
+}
+
+#inputSetTreeView {
+	border-bottom: 1px solid #eee;
+}
+
 svg .node rect {
 	fill: #fff;
 	stroke: #444;
@@ -233,6 +217,7 @@ svg .node rect {
 
 svg .node {
 	font: 10px sans-serif;
+	cursor: pointer;
 }
 
 svg .link {
@@ -242,10 +227,66 @@ svg .link {
 }
 
 svg text {
-	cursor: default;
+	cursor: pointer;
 	fll: #333;
 }
 
 svg rect.highlighted {
 	stroke: #ffc40d; /* yellow from bootstrap */
+}
+
+/****** TREE VIEW TABS ******/
+
+#exTreeTabs {
+	margin-bottom: 10px;
+}
+
+#exTreeTabs > li {
+	width: 50%;
+	text-align: center;
+}
+
+#exTreeTabs a {
+	color: #46A546;
+}
+
+#exTreeTabs a:hover {
+	color: #265a26;
+}
+
+#exTreeTabs > .active > a, #exTreeTabs > .active > a:hover {
+	color: #fff;
+	background-color: #46A546;
+}
+
+#exTreeTabs > li > a:hover {
+	background-color: #f8fbf8;
+}
+
+/***** EXERCISE LIST VIEW *****/
+
+#exercisesListView {
+	list-style:none;
+	margin: 0;
+}
+
+.exerciseListItem {
+	line-height: 18px;
+	font-size: 14px;
+	text-rendering: optimizelegibility;
+	margin: 3px 0;
+}
+
+.exerciseListItem.active {
+	font-weight: bold;
+}
+
+.exerciseListItem i {
+	margin-top: 2px;
+	margin-left: 5px;
+	cursor: pointer;
+}
+
+.exerciseListItem a {
+	color: inherit;
 }

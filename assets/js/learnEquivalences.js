@@ -52,13 +52,21 @@ App.init = function () {
 	
 		router = new App.LearnEqRouter(),
 
-		resizer = function () {
-			var $container = $("#mainAppRow"),
-				contPosY = $container.offset().top,
-				windowHeight = $(window).innerHeight(),
-				contHeight;
+		$mainAppRow = $("#mainAppRow"),
+		$treeVisView = $("#treeVisView"),
+		mainAppHeight = $mainAppRow.height() / 2,
+		treeVisViewWidth = $treeVisView.width(),
 
-			$container.height(windowHeight - contPosY - 20);
+		resizer = function () {
+			var mainAppPosY = $mainAppRow.offset().top,
+				windowHeight = $(window).innerHeight(),
+				newMainAppHeight = windowHeight - mainAppPosY - 20;
+
+			$mainAppRow.height(newMainAppHeight);
+
+			// minus
+			App.inputSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 40)/2);
+			App.goalSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 40)/2);
 		};
 		
 	App.exercisesListView = new App.ExercisesListView({
@@ -76,6 +84,9 @@ App.init = function () {
 		el : document.getElementById("userManagerView"),
 		model : App.userManager
 	});
+
+	App.inputSetTreeVis = new App.TreeVis({}, "inputSet", treeVisViewWidth, mainAppHeight);
+	App.goalSetTreeVis = new App.TreeVis({}, "goalSet", treeVisViewWidth, mainAppHeight);
 
 	eqRulesView.render();
 

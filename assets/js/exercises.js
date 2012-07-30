@@ -80,7 +80,7 @@ App.StepView = Backbone.View.extend({
 		}
 	},
 
-	onChangeHighlightedDel: function () {
+	onChangeHighlightedDel : function () {
 		if (this.model.get("highlightedDel")) {
 			this.$(".node").eq(0).addClass("highlightedDel");
 		} else {
@@ -412,13 +412,23 @@ App.Exercise = Backbone.Model.extend({
 		return null;
 	},
 
-	onChangeSelections: function () {
-		// output for debugging
-		// TODO: remove this for production
-		if (this.get("currentlySelectedNode")) { console.log("Current Node: ", this.get("currentlySelectedNode").toString()); }
-		if (this.get("currentlySelectedStep")) { console.log("Current Step: ", this.get("currentlySelectedStep").get("node").toString()); }
-		if (this.get("currentlySelectedSteps")) { console.log("Current Steps: ", this.get("currentlySelectedSteps")); }
-		if (this.get("currentlySelectedEqRule")) { console.log("Current EqRule: ", this.get("currentlySelectedEqRule").get("rule")); }
+	onChangeSelections : function () {
+		console.log("onChangeSelections called");
+		var currentStepsString;
+		// Update the tree visualisations to reflect the change in selection.
+		if(!this.get("currentlySelectedNode")) { // If there is no node selected, deselect all nodes in the visualisations
+			App.inputSetTreeVis
+				.updateData(this.get("inputSet").last())
+				.removeAllHighlights();
+			App.goalSetTreeVis
+				.updateData(this.get("goalSet").last())
+				.removeAllHighlights();
+		} else {
+			currentStepsString = this.get("currentlySelectedSteps").getStepsString();
+			App[currentStepsString + "TreeVis"]
+				.updateData(this.get("currentlySelectedStep"))
+				.highlightFromId(this.get("currentlySelectedNode").cid);
+		}
 
 		// If a whole step is selected and it is not the input or the goal then trigger the allowance of unstacking
 		if (this.get("currentlySelectedNode") && this.get("currentlySelectedStep")
@@ -438,13 +448,13 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	// Deselect both the active equivalence rule and node
-	deselectEqRuleAndNode: function () {
+	deselectEqRuleAndNode : function () {
 		this.deselectNode();
 		this.deselectEqRule();
 	},
 
 	// Deselects the currently active equivalence rule
-	deselectEqRule: function () {
+	deselectEqRule : function () {
 		// Set the currently selected rules active property to false
 		if (this.get("currentlySelectedEqRule")) {
 			this.get("currentlySelectedEqRule").set({ active: false });
@@ -802,6 +812,9 @@ App.ExerciseView = Backbone.View.extend({
 		// clicked on to select a certain eq rule.
 		App.vent.on("currentlySelectedEqRuleChange", this.onEqRuleSelected, this);
 
+		// Bind to the central event triggered by clicking on a node in the TreeVis
+		App.vent.on("treeVisNodeClick", this.onTreeVisNodeClick, this);
+
 		this.$el.html(renderedContent);
 		// Render the input set
 		this.$el.append(this.inputSetView.render().$el);
@@ -819,6 +832,9 @@ App.ExerciseView = Backbone.View.extend({
 			placement : "bottom",
 			trigger : "manual"
 		});
+
+		App.inputSetTreeVis.updateData(this.model.get("inputSet").last());
+		App.goalSetTreeVis.updateData(this.model.get("goalSet").last());
 
 		return this;
 	},
@@ -1026,12 +1042,27 @@ App.ExerciseView = Backbone.View.extend({
 		this.goalSetView.close();
 
 		if (this.successAlertView) { // If there is a success alert view
-			if (this.successAlertView.$(".btn-no").length > 0) {
+			if (this.successAlertView.$(".btn-no").length > 0) { // If it has btns still visible, click no.
 				this.successAlertView.$(".btn-no").click();
 			}
 		}
 
+		App.vent.trigger("closedExerciseView");
+
 		console.log("Closed ExerciseView");
+	},
+
+
+	onTreeVisNodeClick : function (set, cid) {
+		var self, currentStepView;
+		if (!this.model.get("currentlySelectedStep") || this.model.get("currentlySelectedSteps").getStepsString() !== set) { // If there isn't a currently selected step.
+			// d3 is currently displaying the last step within set
+			_.last(this[set + "View"].stepViewModelPairs)[0].nodeView.clickOnAnswerNode(cid);
+		} else {
+			self = this;
+			currentStepView = _.find(this[set+"View"].stepViewModelPairs, function (p) { return p[1] === self.model.get("currentlySelectedStep")  })[0];
+			currentStepView.nodeView.clickOnAnswerNode(cid);
+		}
 	}
 });
 

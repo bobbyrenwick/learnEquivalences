@@ -124,7 +124,10 @@ App.EquivalenceRule = Backbone.Model.extend({
 	applyRule: function (direction, matchingPairs, subToReplace, whole, tNo) {
 		var treeNo = tNo || 0,
 			tree = (direction < 0 ? this.get("lhsTrees")[treeNo].deepClone() : this.get("rhsTrees")[treeNo].deepClone()),
-			subToReplaceWith = App.EquivalenceRule.replaceSubsInTree(tree, matchingPairs);
+			subToReplaceWith;
+
+		subToReplace.set("selected", false);
+		subToReplaceWith = App.EquivalenceRule.replaceSubsInTree(tree, matchingPairs);
 
 		return whole.deepCloneReplace(subToReplace, subToReplaceWith);
 	},

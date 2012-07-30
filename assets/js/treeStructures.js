@@ -9,17 +9,11 @@ App.Node = Backbone.Model.extend({
 		selected: false
 	},
 
-	initialize: function () {
-		this.on("error", this.logError);
-	},
+	initialize: function () { /* do nothing */ },
 
-	truthValue: function () {
-		return this.get("truth");
-	},
+	truthValue: function () { return this.get("truth"); },
 
-	toString: function () {
-		return this.get("symbol");
-	},
+	toString: function () { return this.get("symbol"); },
 
 	// Builds an array of arrays that represent the atoms that are present in a node
 	getAtoms: function (arr) {
@@ -42,14 +36,9 @@ App.Node = Backbone.Model.extend({
 		arr.push(atomObj);
 	},
 
-	getSubFormulae: function (arr) {
-		arr.push(this);
-			return;
-	},
+	getSubFormulae: function (arr) { arr.push(this); },
 
-	deepClone: function () {
-		return this.clone();
-	},
+	deepClone: function () { return this.clone(); },
 
 	deepCloneReplace: function (subToReplace, subToReplaceWith) {
 		if (this === subToReplace) {
@@ -60,6 +49,15 @@ App.Node = Backbone.Model.extend({
 });
 
 App.Constant = App.Node.extend({
+
+	defaults : {
+		truth : false,
+		precedence : 10000,
+		left : null,
+		right : null,
+		selected : false
+	}
+
 	// As getAtoms is used for checking equivalence by manipulating the
 	// truth values of the atoms, constants don't need to be included.
 	getAtoms: function (arr) {
@@ -376,7 +374,7 @@ App.AnswerNodeView = App.NodeView.extend({
 	},
 
 	symbolClick: function (e) {
-		e.stopPropagation();
+		if (e) { e.stopPropagation(); }
 		this.trigger("symbolClickToStep", this);
 	},
 
@@ -419,5 +417,15 @@ App.AnswerNodeView = App.NodeView.extend({
 		}
 		
 		this.model.off(null, null, this);
+	},
+
+	clickOnAnswerNode : function(cid) {
+		if (this.model.cid === cid) {
+			this.symbolClick();
+		} else if (this.leftView) {
+			this.leftView.clickOnAnswerNode(cid);
+		} else if (this.rightView) {
+			this.rightView.clickOnAnswerNode(cid);
+		}
 	}
 });

@@ -325,13 +325,24 @@
 					</ul>
 				</div><!--/.well -->
 			</div><!--/span 1st col-->
-			<div class="span6" id="exercise-view"></div><!-- end mid col -->
-			<div class="span3" id="exercises-view">
-				<div class="inner-padding-left">
-					<h2>Exercises</h2>
-					<ul id="exercisesListView"></ul>
+			<div class="span9">
+				<div class="row-fluid" id="mainContent">
+      				<div class="span7" id="exercise-view"></div>
+					<div class="span5" id="treeVisView">
+						<ul class="nav nav-pills" id="exTreeTabs">
+							<li class="active"><a href="#treeVisSvgs" data-toggle="tab">Tree View</a></li>
+							<li><a href="#exercisesListView" data-toggle="tab">Exercises</a></li>
+						</ul>
+						<div class="tab-content">
+							<div class="tab-pane active" id="treeVisSvgs">
+								<div id="inputSetTreeView"></div>
+								<div id="goalSetTreeView"></div>
+							</div>
+							<ul class="tab-pane" id="exercisesListView"></ul>
+						</div>
+					</div>
 				</div>
-			</div><!-- end rhs col -->
+			</div><!-- end big col -->
 		</div><!--/mainAppRow-->
 		<!-- would put footer with row-fluid class here -->
 	</div><!--/.fluid-container-->
@@ -386,7 +397,7 @@
 	<script src="assets/js/lib/json2.js"></script>
 	<script src="assets/js/lib/jquery-1.7.2.js"></script>
 	<script src="assets/js/lib/jquery.cookie.js"></script>
-	<script src="assets/js/lib/d3.v2.min.js"></script>
+	<script src="assets/js/lib/d3.v2.js"></script>
 	<script src="assets/js/bootstrap-transition.js"></script>
 	<script src="assets/js/bootstrap-alert.js"></script>
 	<script src="assets/js/bootstrap-modal.js"></script>
