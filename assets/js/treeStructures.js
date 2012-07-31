@@ -71,7 +71,26 @@ App.Predicate = App.Node.extend({
 		var json = _.clone(this.attributes);
 		json.terms = _.map(json.terms, function (term) { return term.toString(); }).join(", ");
 		return json;
+	},
+
+	deepClone : function () {
+		var clone;
+		clone = this.clone();
+		clone.set("terms", _.map(clone.get("terms"), function (term) { return term.deepClone(); }));
+		return clone;
+	},
+
+	deepCloneReplace : function (subToReplace, subToReplaceWith) {
+		var clone;
+		if (this === subToReplace) {
+			return subToReplaceWith;
+		}
+		
+		clone = this.clone();
+		clone.set("terms", _.map(clone.get("terms"), function (term) { return term.deepCloneReplace(subToReplace, subToReplaceWith); }));
+		return clone;
 	}
+
 });
 
 App.Constant = App.Node.extend({
@@ -145,13 +164,15 @@ App.UnaryNode = App.Node.extend({
 
 	deepCloneObj: function () {
 		return {
-			right: this.get("right").deepClone()
+			right: this.get("right").deepClone(),
+			variable : this.get("variable")
 		};
 	},
 
 	deepCloneReplaceObj: function (subToReplace, subToReplaceWith) {
 		return {
-			right: this.get("right").deepCloneReplace(subToReplace, subToReplaceWith)
+			right: this.get("right").deepCloneReplace(subToReplace, subToReplaceWith),
+			variable : this.get("variable")
 		};
 	},
 
@@ -190,6 +211,17 @@ App.UniversalQuantifier = App.Quantifier.extend({
 		terms : null,
 		variable : null
 	},
+
+	deepClone : function () {
+		return new App.UniversalQuantifier(this.deepCloneObj());
+	},
+
+	deepCloneReplace : function (subToReplace, subToReplaceWith) {
+		if (this === subToReplace) {
+			return subToReplaceWith
+		}
+		return new App.UniversalQuantifier(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));	
+	}
 });
 
 App.ExistensialQuantifier = App.Quantifier.extend({
@@ -201,6 +233,17 @@ App.ExistensialQuantifier = App.Quantifier.extend({
 		terms : null,
 		variable : null
 	},
+
+	deepClone : function () {
+		return new App.ExistensialQuantifier(this.deepCloneObj());
+	},
+
+	deepCloneReplace : function (subToReplace, subToReplaceWith) {
+		if (this === subToReplace) {
+			return subToReplaceWith
+		}
+		return new App.ExistensialQuantifier(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));	
+	}
 });
 
 App.NegationNode = App.UnaryNode.extend({

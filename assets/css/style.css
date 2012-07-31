@@ -237,6 +237,10 @@ svg rect.highlighted {
 
 /****** TREE VIEW TABS ******/
 
+.tab-content {
+	overflow-x: hidden;
+}
+
 #exTreeTabs {
 	margin-bottom: 10px;
 }

@@ -62,7 +62,7 @@ propsentence :
         {$$ = new App.Node({ symbol: String(yytext) });}
     | '\u22A5'
         {$$ = new App.Contradiction();}
-    | '\u22a4'
+    | '\u22A4'
         {$$ = new App.Tautology();}
     ;
 

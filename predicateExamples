@@ -14,4 +14,4 @@
 ¬∃X (p(X) ∧ ∀Y ¬q(X,Y))
 
 (∀X(p(X)→q(X))) → ∃Y(∀Z(¬r(Y,Z)∨s(Y,Z)))
-∃X(p(X)∧¬q(X))  ∃Y(¬∃Z(r(Y,Z)∧¬s(Y,Z)))
+∃X(p(X)∧¬q(X)) ∨ ∃Y(¬∃Z(r(Y,Z)∧¬s(Y,Z)))

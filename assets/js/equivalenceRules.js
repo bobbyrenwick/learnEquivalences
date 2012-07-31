@@ -103,7 +103,12 @@ App.EquivalenceRule = Backbone.Model.extend({
 			matchingPairs;
 
 		for (i = 0; i < noTrees; i++) {
-			matchingPairs = [];
+			
+			matchingPairs = {
+				atomPairs : [],
+				quantifierPairs : []
+			};
+			
 			if (App.EquivalenceRule.formulaMatchesTree(formula, trees[i], matchingPairs)) {
 				// We have found a rule that is applicable, so return the matching pairs and
 				return matchingPairs;
@@ -113,11 +118,11 @@ App.EquivalenceRule = Backbone.Model.extend({
 		return false;
 	},
 
-	// Applys the rule to the subToReplace and replaces it within the whole formula
+	// Applys the rule to the subToReplace and replaces it within the whole formula - returns a new tree 
+	// that puts matchingPairs into a copy of the first of rhs(lhs)Trees for fwd(bwd).
 	// direction - > 0 for fwds, < 0 for bwds
-	// matchingPairs - [ruleSymbol, subFormulae] pairs from EquivalenceRule.formulaMatchesTree()
-	//                 returns a new tree that puts matchingPairs into a copy of the first of 
-	//				   rhs(lhs)Trees for fwd(bwd).
+	// matchingPairs - { atomPairs : [[ruleSymbol, subFormulae]], quantifierPairs : [[ruleSymbol, quantVar]] } 
+	//                 from EquivalenceRule.formulaMatchesTree()
 	// subToReplace - reference to the subformula that needs to be replaced
 	// whole - the entire formula contained within a step.
 	// (tNo) - used to iterate through all the possible trees that could come from application (default = 0)
@@ -160,8 +165,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 	//                 This allows cases where the rule contains the same symbol more than 
 	//				   once and so should be matched to the same sub-formula
 	formulaMatchesTree: function (formula, tree, matchingPairs) {
-		var i, noPairs = matchingPairs.length,
-			treeInPair = false;
+		var i, noAtomPairs = matchingPairs.atomPairs.length, noQuantifierPairs = matchingPairs.quantifierPairs.length;
 
 		if (tree instanceof App.BinaryNode) {
 			// the the top level structure of the tree is the same keep matching
@@ -181,6 +185,21 @@ App.EquivalenceRule = Backbone.Model.extend({
 			if (formula instanceof App.UnaryNode && formula.get("symbol") === tree.get("symbol")) {
 				if (!App.EquivalenceRule.formulaMatchesTree(formula.get("right"), tree.get("right"), matchingPairs)) {
 					return false;
+				} else if (formula instanceof App.Quantifier) { // need to also check that the quantifier variable of the rule has matched
+						
+						for (i = 0; i < noQuantifierPairs; i++) {
+							if (matchingPairs.quantifierPairs[i][0] === tree.get("variable")) {
+								if (matchingPairs.quantifierPairs[i][1] !== formula.get("variable")) {
+									return false;
+								} else { // the matching pair found this time is the same as the other times it has been found.
+									return true;
+								}
+							}
+						}
+
+						// If not already matched just store new [ruleSymbol, formulaQuantVariable] pair
+						matchingPairs.quantifierPairs.push([tree.get("variable"), formula.get("variable")]);
+						return true;
 				}
 			} else {
 				return false;
@@ -201,18 +220,17 @@ App.EquivalenceRule = Backbone.Model.extend({
 			// Reached an atom - go through the matching [ruleSymbol, subFormula] pairs. If the symbol
 			// has already been matched to a sub formula - formula needs to be the same as the previously 
 			// matched sub formula.
-			// If not already matched just store new [ruleSymbol, subFormula] pair
-			for (i = 0; i < noPairs; i++) {
-				if (matchingPairs[i][0].toString() === tree.toString()) {
-					if (matchingPairs[i][1].toString() !== formula.toString()) {
+			for (i = 0; i < noAtomPairs; i++) {
+				if (matchingPairs.atomPairs[i][0].toString() === tree.toString()) {
+					if (matchingPairs.atomPairs[i][1].toString() !== formula.toString()) {
 						return false;
 					} else { // the matching pair found this time is the same as the other times it has been found.
 						return true;
 					}
 				}
 			}
-
-			matchingPairs.push([tree, formula]);
+			// If not already matched just store new [ruleSymbol, subFormula] pair
+			matchingPairs.atomPairs.push([tree, formula]);
 			return true;
 		}
 		return true;
@@ -222,8 +240,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 	// matchingPairs contains [rule symbol, sub-formula] pairs - need to deepClone the sub-formula parts of these
 	// to ensure we have new objects rather than references to the old ones
 	replaceSubsInTree: function (tree, matchedPairs) {
-		var i, noPairs = matchedPairs.length,
-			atomInPairs = false;
+		var i, noPairs = matchedPairs.atomPairs.length;
 
 		// Keep going till we hit a node
 		if (tree instanceof App.BinaryNode) {
@@ -237,12 +254,16 @@ App.EquivalenceRule = Backbone.Model.extend({
 			tree.set({
 				"right": App.EquivalenceRule.replaceSubsInTree(tree.get("right"), matchedPairs)
 			});
+
+			if (tree instanceof App.Quantifier) {
+				tree.set("variable", _.find(matchedPairs.quantifierPairs, function (pair) { return pair[0] === tree.get("variable") })[1])
+			}
 		} else { // We have found an atom
 			// Try to find the atom in matchedPairs
 			for (i = 0; i < noPairs; i++) {
 				// The atom has been found in the list so replace this leaf with a copy of the sub-formula
-				if (matchedPairs[i][0].toString() === tree.toString()) {
-					return matchedPairs[i][1].deepClone();
+				if (matchedPairs.atomPairs[i][0].toString() === tree.toString()) {
+					return matchedPairs.atomPairs[i][1].deepClone();
 				}
 			}
 
@@ -482,7 +503,7 @@ App.EquivalenceRulesView = Backbone.View.extend({
 
 	onUserLoggedIn : function () {
 		var self = this,
-			unsavedEqRules = this.collection.rest(35);
+			unsavedEqRules = this.collection.rest(App.noBasicEqRules);
 
 		this.collection.remove(unsavedEqRules);
 
@@ -514,17 +535,17 @@ App.EquivalenceRulesView = Backbone.View.extend({
 	},
 
 	onUserLoggingOut : function () {
-		var unsavedEqRules = _.filter(this.collection.rest(35), function (eqRule) { return eqRule.isNew(); })
+		var unsavedEqRules = _.filter(this.collection.rest(App.noBasicEqRules), function (eqRule) { return eqRule.isNew(); })
 		// Have to save synchronously to work when refreshing
 		_.each(unsavedEqRules, function (eqRule) { eqRule.save({},{ async : false }); }); 
 
 		// Remove all eqRules from this.collection past the default rules
-		this.collection.remove(this.collection.rest(35));
+		this.collection.remove(this.collection.rest(App.noBasicEqRules));
 	},
 
 	removeEqRule : function (eqRule) {
 		// As only ever used to remove user eqs, reduce the search size.
-		var userEqRuleViewModelPairs = _.rest(this.eqRuleViewModelPairs,35);
+		var userEqRuleViewModelPairs = _.rest(this.eqRuleViewModelPairs,App.noBasicEqRules);
 
 		// Find the view, eqRule pair that holds the eqRule being deleted.
 		var pairToRemove = _.find(userEqRuleViewModelPairs, function (pair) {
@@ -537,7 +558,7 @@ App.EquivalenceRulesView = Backbone.View.extend({
 		// Remove the view, eqRule pair from the array 
 		this.eqRuleViewModelPairs = _.without(this.eqRuleViewModelPairs, pairToRemove);
 
-		if (this.eqRuleViewModelPairs.length === 35) { // Then we have removed last user eqRule, remove header
+		if (this.eqRuleViewModelPairs.length === App.noBasicEqRules) { // Then we have removed last user eqRule, remove header
 			this.$(".nav-header").eq(1).remove();
 		}
 	}
@@ -2069,5 +2090,224 @@ App.equivalenceRules = new App.EquivalenceRules([
 		new App.Node({
 			symbol: "A"
 		})]
+	}, {
+		rule: "∀X∀Y(A) ≡ ∀Y∀X(A)",
+		bidirectional: false,
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.UniversalQuantifier({
+				variable : "Y",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})],
+
+		rhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "Y",
+			right: new App.UniversalQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})]
+	}, {
+		rule: "∃X∃Y(A) ≡ ∃Y∃X(A)",
+		bidirectional: false,
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.ExistensialQuantifier({
+				variable : "Y",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})],
+
+		rhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "Y",
+			right: new App.ExistensialQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})]
+	}, {
+		rule: "¬∀X(A) ≡ ∃X¬(A)",
+		bidirectional: true,
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.NegationNode({
+			right: new App.UniversalQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})],
+
+		rhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.NegationNode({
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})]
+	}, {
+		rule: "¬∃X(A) ≡ ∀X¬(A)",
+		bidirectional: true,
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.NegationNode({
+			right: new App.ExistensialQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})],
+
+		rhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.NegationNode({
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})]
+	}, {
+		rule: "∀X(A ∧ B) ≡ ∀X(A) ∧ ∀X(B)",
+		bidirectional: true,
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.AndNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right: new App.Node({
+					symbol : "B"
+				})
+			})
+		}),
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.AndNode({
+				left : new App.Node({
+					symbol : "B"
+				}),
+				right: new App.Node({
+					symbol : "A"
+				})
+			})
+		})],
+
+		rhsTrees: [
+		new App.AndNode({
+			left : new App.UniversalQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "A"
+				})
+			}),
+			right: new App.UniversalQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "B"
+				})
+			})
+		}),
+		new App.AndNode({
+			left : new App.UniversalQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+			right: new App.UniversalQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})]
+	}, {
+		rule: "∃X(A ∧ B) ≡ ∃X(A) ∧ ∃X(B)",
+		bidirectional: true,
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.AndNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right: new App.Node({
+					symbol : "B"
+				})
+			})
+		}),
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.AndNode({
+				left : new App.Node({
+					symbol : "B"
+				}),
+				right: new App.Node({
+					symbol : "A"
+				})
+			})
+		})],
+
+		rhsTrees: [
+		new App.AndNode({
+			left : new App.ExistensialQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "A"
+				})
+			}),
+			right: new App.ExistensialQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "B"
+				})
+			})
+		}),
+		new App.AndNode({
+			left : new App.ExistensialQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+			right: new App.ExistensialQuantifier({
+				variable : "X",
+				right: new App.Node({
+					symbol: "A"
+				})
+			})
+		})]
 	}
+
 ]);
+
+App.noBasicEqRules = App.equivalenceRules.length;

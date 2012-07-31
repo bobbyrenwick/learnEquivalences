@@ -61,6 +61,8 @@ App.init = function () {
 		mainAppHeight = $mainAppRow.height() / 2,
 		treeVisViewWidth = $treeVisView.width(),
 
+		resizeTimeout,
+
 		resizer = function () {
 			var mainAppPosY = $mainAppRow.offset().top,
 				windowHeight = $(window).innerHeight(),
@@ -68,9 +70,9 @@ App.init = function () {
 
 			$mainAppRow.height(newMainAppHeight);
 
-			// minus
 			App.inputSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 40)/2);
 			App.goalSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 40)/2);
+			
 		};
 		
 	App.exercisesListView = new App.ExercisesListView({

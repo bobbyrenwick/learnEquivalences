@@ -441,52 +441,52 @@
             })
           }),
 
-          matchingPairs = [],
+          matchingPairs = { atomPairs : [], quantifierPairs : [] },
           expectPairs = [];
 
       // Check that any formula matches tree with just symbol A
       ok(App.EquivalenceRule.formulaMatchesTree(dimplyNode, a , matchingPairs), "Any formula should always match a rule that has just a node as its tree");
       expectPairs = [[a, dimplyNode]];
-      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+      deepEqual(matchingPairs.atomPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
 
       // Check that the formula matches a symbol and not just the layout
       ok(!App.EquivalenceRule.formulaMatchesTree(dimplyNode, implyNode, matchingPairs), "A double implication should not match a single implication");
 
       // Check that matching works for a binary node
-      matchingPairs = [];
+      matchingPairs = { atomPairs : [], quantifierPairs : [] };
       ok(App.EquivalenceRule.formulaMatchesTree(implyNode, implyNode, matchingPairs), "A single implication should match a single implication");
       expectPairs = [[a, a],[b, b]];
-      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+      deepEqual(matchingPairs.atomPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
 
       // Check that the matching works for a unary node
-      matchingPairs = [];
+      matchingPairs = { atomPairs : [], quantifierPairs : [] };
       ok(App.EquivalenceRule.formulaMatchesTree(negationNode, negationNode, matchingPairs), "");
       expectPairs = [[b, b]];
-      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+      deepEqual(matchingPairs.atomPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
 
       // Check that the matching works for nested nodes
-      matchingPairs = [];
+      matchingPairs = { atomPairs : [], quantifierPairs : [] };
       ok(App.EquivalenceRule.formulaMatchesTree(abcd, abcd, matchingPairs), "Nested AndNodes should be equivalent");
       expectPairs = [[a, a],[b, b],[c, c],[d, d]];
-      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+      deepEqual(matchingPairs.atomPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
 
       // Check that the matching works for repeated symbols within the equivalence rule
-      matchingPairs = [];
+      matchingPairs = { atomPairs : [], quantifierPairs : [] };
       ok(App.EquivalenceRule.formulaMatchesTree(repeatingSymbolsCheckTrue, repeatingSymbols, matchingPairs), "Repeated symbols should match");
       expectPairs = [
         [repeatingSymbols.get("left").get("left"), repeatingSymbolsCheckTrue.get("left").get("left")],
         [repeatingSymbols.get("left").get("right"), repeatingSymbolsCheckTrue.get("left").get("right")],
         [repeatingSymbols.get("right").get("right"), repeatingSymbolsCheckTrue.get("right").get("right")]
       ];
-      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+      deepEqual(matchingPairs.atomPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
 
       // Check that the matching works for repeated symbols with tautologies
-      matchingPairs = [];
+      matchingPairs = { atomPairs : [], quantifierPairs : [] };
       ok(App.EquivalenceRule.formulaMatchesTree(aOrTaut, aOrTaut, matchingPairs), "Repeated symbols should match");
       expectPairs = [
         [a, a]
       ];
-      deepEqual(matchingPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
+      deepEqual(matchingPairs.atomPairs, expectPairs, "The matching sub-formula to eqrule tree nodes is correct");
     
     });
 
@@ -531,21 +531,23 @@
           }),
 
 
-          nodeMatchingPairs = [
-            [new App.Node({ symbol : "A" }), p],
-          ];
+          nodeMatchingPairs = { atomPairs : [[new App.Node({ symbol : "A" }), p]] };
 
 
-          andMatchingPairs = [
-            [new App.Node({ symbol : "A" }), p],
-            [new App.Node({ symbol : "B" }), q],
-          ];
+          andMatchingPairs = {
+            atomPairs : [
+              [new App.Node({ symbol : "A" }), p],
+              [new App.Node({ symbol : "B" }), q],
+            ]
+          };
 
-          expectPairs = [
-            [repeatingSymbols.get("left").get("left"), repeatingSymbolsCheckTrue.get("left").get("left")],
-            [repeatingSymbols.get("left").get("right"), repeatingSymbolsCheckTrue.get("left").get("right")],
-            [repeatingSymbols.get("right").get("right"), repeatingSymbolsCheckTrue.get("right").get("right")]
-          ];
+          expectPairs = {
+            atomPairs : [
+              [repeatingSymbols.get("left").get("left"), repeatingSymbolsCheckTrue.get("left").get("left")],
+              [repeatingSymbols.get("left").get("right"), repeatingSymbolsCheckTrue.get("left").get("right")],
+              [repeatingSymbols.get("right").get("right"), repeatingSymbolsCheckTrue.get("right").get("right")]
+            ]
+          };
 
       // Check that any formula matches tree with just symbol A
       nodeReplace = App.EquivalenceRule.replaceSubsInTree(nodeReplace, nodeMatchingPairs);
@@ -566,13 +568,13 @@
     App.equivalenceRules.each(function (eqRule) {
       test(eqRule.get("rule"), function () {
 
-        var matchingPairs = [],
+        var matchingPairs = matchingPairs = { atomPairs : [], quantifierPairs : [] },
             ruleArr = eqRule.get("rule").split("≡"),
             leftWff = App.parser.parse(ruleArr[0]),
             rightWff = App.parser.parse(ruleArr[1]);
 
         ok(App.EquivalenceRule.formulaMatchesTree(leftWff, eqRule.get("lhsTrees")[0], matchingPairs), eqRule.get("rule") + " passes tree test when supplied with identical wff forwards");
-        matchingPairs = [];
+        matchingPairs = { atomPairs : [], quantifierPairs : [] };
         ok(App.EquivalenceRule.formulaMatchesTree(rightWff, eqRule.get("rhsTrees")[0], matchingPairs), eqRule.get("rule") + " passes tree test when supplied with identical wff backwards");
 
 
