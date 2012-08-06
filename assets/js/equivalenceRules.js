@@ -2,7 +2,8 @@ var App = App || {};
 
 App.EquivalenceRule = Backbone.Model.extend({
 	defaults: {
-		active: false
+		active: false,
+		freeVarCheck: false
 	},
 
 	url : "api/eqRule",
@@ -96,7 +97,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 	// Tests whether the equivalence rule is applicable to the supplied formula, goes through all the
 	// different commutative permutations of the rule in the direction supplied -1 for backwards,
 	// 1 for forwards
-	isApplicable: function (direction, formula) {
+	isApplicable : function (direction, formula) {
 		var i, trees = (direction < 0 ? this.get("rhsTrees") : this.get("lhsTrees")),
 			noTrees = trees.length,
 			applicable = false,
@@ -110,8 +111,10 @@ App.EquivalenceRule = Backbone.Model.extend({
 			};
 			
 			if (App.EquivalenceRule.formulaMatchesTree(formula, trees[i], matchingPairs)) {
-				// We have found a rule that is applicable, so return the matching pairs and
-				return matchingPairs;
+				// We have found a rule that is applicable, so if needed, check any variables don't occur free.
+				if (!this.get("freeVarCheck") || this.passesFreeVarTest(formula, matchingPairs)) {
+					return matchingPairs;
+				}
 			}
 		}
 		// If it never matched any of the lhs trees then return false
@@ -126,7 +129,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 	// subToReplace - reference to the subformula that needs to be replaced
 	// whole - the entire formula contained within a step.
 	// (tNo) - used to iterate through all the possible trees that could come from application (default = 0)
-	applyRule: function (direction, matchingPairs, subToReplace, whole, tNo) {
+	applyRule : function (direction, matchingPairs, subToReplace, whole, tNo) {
 		var treeNo = tNo || 0,
 			tree = (direction < 0 ? this.get("lhsTrees")[treeNo].deepClone() : this.get("rhsTrees")[treeNo].deepClone()),
 			subToReplaceWith;
@@ -148,6 +151,43 @@ App.EquivalenceRule = Backbone.Model.extend({
 
 	parse : function (response) {
 		return App.EquivalenceRule.parse(response);
+	},
+
+
+	// Given a formula and set of matching pairs, decides whether the formula,
+	// passes the free var test.
+	passesFreeVarTest : function (formula, matchingPairs) {
+		var freeVarPairs = this.get("freeVarCheck"),
+			quantVar,
+			subFVar;
+
+		// For now return true if no matching quantifiers - because freeVarCheck being
+		// called on fwd and bwd. On bwd there are no matching quantifiers.
+		if (matchingPairs.quantifierPairs.length === 0) { return true; }
+
+		for (var i = 0, l = freeVarPairs.length; i < l; i++) {
+			// Set quantvar to the var that shouldnt occur in subF, given in terms
+			// of the rule.
+			quantVar = freeVarPairs[i][0];
+			subF = freeVarPairs[i][1];
+
+			// Set quantvar to the variable that it matched to in formula
+			quantVar = _.find(matchingPairs.quantifierPairs, function (p) {
+				return p[0] === quantVar;
+			})[1];
+
+			// Find the subF of formula that matches the subF letter in the pair
+			subF = _.find(matchingPairs.atomPairs, function (p) {
+				return p[0].get("symbol") === subF;
+			})[1];
+
+			// Test to see if the variable occurs free in the subformula.
+			if (App.EquivalenceRule.occursFree(quantVar, subF)) {
+				return false;
+			}
+		}
+
+		return true;
 	}
 	
 }, {
@@ -278,22 +318,46 @@ App.EquivalenceRule = Backbone.Model.extend({
 	// In turn used for creating an introduction modal.
 	// E.G for backwards application of A → A ≡ ⊤, would return ["A"]
 	getIntroSymbols: function (tree, tree2) {
-		var treeAtoms = [],
-			treeSymbols, tree2Atoms = [],
-			tree2Symbols;
+		var treeAtoms = [], treeQuantVars,
+			treeSymbols, tree2Atoms = [], tree2QuantVars,
+			tree2Symbols, subF = [];
 
+		// Get all the atoms in tree
 		tree.getAtoms(treeAtoms);
 		treeSymbols = _.pluck(treeAtoms, "symbol");
 
+		// Get all the quantifier variables in tree
+		tree.getSubFormulae(subF);
+		treeQuantVars = _.chain(subF)
+			.filter(function (sf) { return sf instanceof App.Quantifier; })
+			.map(function (sf) { return sf.get("variable"); })
+			.value();
+
+		// Get all the atoms in tree 2
 		tree2.getAtoms(tree2Atoms);
 		tree2Symbols = _.pluck(tree2Atoms, "symbol");
 
-		return [
-		_.difference(tree2Symbols, treeSymbols), // fwdIntroSymbols
-		_.difference(treeSymbols, tree2Symbols) // bwdIntroSymbols
-		];
+		// Reset subF
+		subF = [];
+
+		// Get all the quantifier variables in tree
+		tree2.getSubFormulae(subF);
+		tree2QuantVars = _.chain(subF)
+			.filter(function (sf) { return sf instanceof App.Quantifier; })
+			.map(function (sf) { return sf.get("variable"); })
+			.value();
+
+		return [{ // fwdIntroSymbols
+			symbols : _.difference(tree2Symbols, treeSymbols),
+			quantifiers : _.difference(tree2QuantVars, treeQuantVars)
+		}, { // bwdIntroSymbols
+			symbols : _.difference(treeSymbols, tree2Symbols), 
+			quantifiers : _.difference(treeQuantVars, tree2QuantVars)
+		}];
 	},
 
+	// TODO: update for new introSymbols design - should be i = 1 when going through the backwards
+	// stuff - check this whe we get into uni
 	// Takes an oldWff and a new Wff and works out if there is an equivalence
 	// rule that has been applied to the oldWff to result in the newWff
 	findEqRuleApplied: function (oldWff, newWff) {
@@ -304,6 +368,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 			testWff, matchingPairs, noPossibleTrees, j, k, introMatchingPairs, iEq, noEqRules = App.equivalenceRules.length,
 			eqRule;
 
+		console.log("findEqRuleApplied called");
 		// Get the sub formulae from the oldWff
 		oldWff.getSubFormulae(oldWffSubs);
 		oldWffSubsLength = oldWffSubs.length;
@@ -321,11 +386,12 @@ App.EquivalenceRule = Backbone.Model.extend({
 				matchingPairs = eqRule.isApplicable(1, oldWffSubs[i]);
 
 				if (matchingPairs) { // If the rule is applicable forwards
-					if (eqRule.get("fwdIntroSymbols").length >= 0) { // i.e the fwd application of rule may/ may not require introduction
+					if (eqRule.get("fwdIntroSymbols").quantifiers.length + eqRule.get("fwdIntroSymbols").symbols.length > 0) { // i.e the fwd application requires introduction
 						for (j = 0; j < newWffSubsLength; j++) { // For all the newWff subFs
 							introMatchingPairs = eqRule.isApplicable(-1, newWffSubs[j]);
 							if (introMatchingPairs) { // If the eqRule is applicable backwards to the newWff subF
 								for (k = 0, noPossibleTrees = eqRule.get("lhsTrees").length; k < noPossibleTrees; k++) {
+									console.log("Fwd Intro: iEq: ", iEq, ", i: ", i, " k:", k);
 									if (eqRule.applyRule(-1, introMatchingPairs, newWffSubs[j], newWff, k).toString() === oldWff.toString()) {
 										return { // If the application of the eqRule to the 
 											"rule": eqRule,
@@ -335,17 +401,28 @@ App.EquivalenceRule = Backbone.Model.extend({
 								}
 							}
 						}
+					} else { // the fwd applicatin of the rule doesn't need introduction
+						for (k = 0, noPossibleTrees = eqRule.get("rhsTrees").length; k < noPossibleTrees; k++) {
+							console.log("Fwd No Intro: iEq: ", iEq, ", i: ", i, " k:", k);
+							if (eqRule.applyRule(1, matchingPairs, oldWffSubs[i], oldWff, k).toString() === newWff.toString()) {
+								return {
+									"rule": eqRule,
+									"direction": 1
+								};
+							}
+						}
 					}
 				}
 
 				if (eqRule.get("bidirectional")) {
 					matchingPairs = eqRule.isApplicable(-1, oldWffSubs[i]);
 					if (matchingPairs) { // Then the equivalence rule is applicable to the current oldWff subF
-						if (eqRule.get("bwdIntroSymbols").length >= 0) { // i.e the bwd application of rule may/ may not require introduction
+						if (eqRule.get("bwdIntroSymbols").quantifiers.length + eqRule.get("bwdIntroSymbols").symbols.length >= 0) { // i.e bwd application may/may not requires introduction
 							for (j = 0; j < newWffSubsLength; j++) { // For all the newWff subFs
 								introMatchingPairs = eqRule.isApplicable(1, newWffSubs[j]);
 								if (introMatchingPairs) { // If the eqRule is applicable to the newWff subF
 									for (k = 0, noPossibleTrees = eqRule.get("rhsTrees").length; k < noPossibleTrees; k++) {
+										console.log("Bwd (No) Intro: iEq: ", iEq, ", i: ", i, " k:", k);
 										if (eqRule.applyRule(1, introMatchingPairs, newWffSubs[j], newWff, k).toString() === oldWff.toString()) {
 											return { // If the application of the eqRule to the 
 												"rule": eqRule,
@@ -362,6 +439,255 @@ App.EquivalenceRule = Backbone.Model.extend({
 		}
 
 		return false;
+	},
+
+	// Takes in a variable (string) and formula
+	// Returns true if the variable occurs free in the 
+	occursFree : function (variable, formula) {
+		return App.EquivalenceRule.occursFreeInstances(variable, formula).length > 0;
+	},
+
+	// Walks down the tree, building an array of the predicates in which variable
+	// occurs free within formula.
+	occursFreeInstancesRec : function (variable, formula, instances) {
+		if (formula instanceof App.Quantifier && formula.get("variable") === variable) {
+			return;
+		}
+
+		if (formula instanceof App.Predicate) {
+			if (formula.containsTerm(variable)) {
+				instances.push(formula);
+			}
+			return;
+		}
+
+		if (formula.get("left")) {
+			App.EquivalenceRule.occursFreeInstancesRec(variable, formula.get("left"), instances);
+		}
+
+		if (formula.get("right")) {
+			App.EquivalenceRule.occursFreeInstancesRec(variable, formula.get("right"), instances)
+		}
+	},
+
+
+	// Portal function that allows us to return the instances array from the recursive function
+	// above.
+	occursFreeInstances : function (variable, formula) {
+		var instances = [];
+		App.EquivalenceRule.occursFreeInstancesRec(variable, formula, instances);
+		return instances;
+	},
+
+	// Take in a variable (string) and formula
+	// Returns true if the variable occurs either in free or bound.
+	occurs : function (variable, formula) {
+		var occInLeft = false,
+			occInRight = false;
+		
+		if (formula instanceof App.Quantifier) {
+			if (formula.get("variable") === variable) {
+				return true;
+			}
+		}
+
+		if (formula instanceof App.Predicate) { // go through the terms
+			return formula.containsTerm(variable);
+		}
+
+		if (formula.get("left")) {
+			occInLeft = App.EquivalenceRule.occurs(variable, formula.get("left"));
+		}
+
+		if (formula.get("right") && !occInLeft) { // short circuit - only check right if needed
+			occInRight = App.EquivalenceRule.occurs(variable, formula.get("right"));
+		}
+
+		return occInLeft || occInRight;
+	},
+
+	renameFreeOccurences : function (variableToReplace, newVariable, subF, whole) {
+		var newSubF = subF.deepClone(),
+			predsWithVarToReplace = App.EquivalenceRule.occursFreeInstances(variableToReplace, newSubF.get("right"));
+
+		// Set the new variable
+		newSubF.set("variable", newVariable);
+
+		// Go through the predicates with free occurences and replace those with new var.
+		_.each(predsWithVarToReplace, function (pred) {
+			_.each(pred.get("terms"), function (term) {
+				if (term.get("symbol") === variableToReplace) {
+					term.set("symbol", newVariable);
+				}
+			});
+		});
+
+		return whole.deepCloneReplace(subF, newSubF);
+	}
+});
+
+App.NormalFormGenerator = Backbone.Model.extend({
+
+	initialise : function () {
+		// do nothing
+	},
+
+	// Takes a formula, an identifier function, and a reference to an eq rule that can eliminate that node type
+	// Returns the formula without that node type if noSteps is defined, that many eliminated
+	removeAll : function (formula, identifier, eqRule, noSteps) {
+		var subFormulae = [],
+			matchingPairs,
+			i = 0;
+
+		// Get all the subformulae from formulae
+		formula.getSubFormulae(subFormulae);
+
+		// Find an implication in the formula
+		subFormulae = _.find(subFormulae, identifier);
+
+		// While there are still implications within the formula
+		while (i < noSteps && subFormulae) {
+			// Get the matching pairs - already know the rule is applicable
+			matchingPairs = eqRule.isApplicable(1, subFormulae);
+
+			// Update the formula to be the result of applying the rule to the 
+			formula = eqRule.applyRule(1, matchingPairs, subFormulae, formula);
+
+			// Reset subformulae
+			subFormulae = [];
+
+			// Get the new sub formulae
+			formula.getSubFormulae(subFormulae);
+
+			// Find an implication in the formula
+			subFormulae = _.find(subFormulae, identifier);
+
+			// Increment the counter
+			i++;
+		}
+
+		return formula;
+	},
+
+	implicationFree : function (formula) {
+		formula = this.removeAll(formula, function (f) { return f instanceof App.DimplyNode; }, App.equivalenceRules.at(23), Infinity);
+		return this.removeAll(formula, function (f) { return f instanceof App.ImplyNode; }, App.equivalenceRules.at(20), Infinity);
+	},
+
+	// Takes a formula with no implications in, returns a negation normal form formula
+	// Straight from Huth - Logic in computer science - doesn't allow for single application
+	// of an equivalence rule therefore use negationNormalFormI - my iterative version.
+	negationNormalForm : function (formula) {
+		var left = formula.get("left"),
+			right = formula.get("right");
+
+		// double negation
+		if (formula instanceof App.NegationNode && right instanceof App.NegationNode) {
+			return this.negationNormalForm(right.get("right"));
+		} else if (formula instanceof App.AndNode) {
+			return new App.AndNode({
+				"left" : this.negationNormalForm(left),
+				"right" : this.negationNormalForm(right)
+			});
+		} else if (formula instanceof App.OrNode) {
+			return new App.OrNode({
+				"left" : this.negationNormalForm(left),
+				"right" : this.negationNormalForm(right)
+			});
+		} else if (formula instanceof App.NegationNode && right instanceof App.AndNode) {
+			return new App.OrNode({
+				"left" : this.negationNormalForm(new App.NegationNode({ "right" : right.get("left") })),
+				"right" : this.negationNormalForm(new App.NegationNode({ "right" : right.get("right") }))
+			});
+		} else if (formula instanceof App.NegationNode && right instanceof App.OrNode) {
+			return new App.AndNode({
+				"left" : this.negationNormalForm(new App.NegationNode({ "right" : right.get("left") })),
+				"right" : this.negationNormalForm(new App.NegationNode({ "right" : right.get("right") }))
+			});
+		} else {
+			return formula.deepClone();
+		}
+	},
+
+	// Takes a formula with no implications in and returns a negation normal form formula
+	negationNormalFormI : function (formula, singleStep) {
+		var dmNotAnd = App.equivalenceRules.at(29),
+			dmNotOr = App.equivalenceRules.at(30),
+			doubleNeg = App.equivalenceRules.at(14);
+
+		do {
+			// Save the current formula string
+			fString = formula.toString();
+
+			// Remove anything with de Morgans And
+			formula = this.removeAll(
+				formula,
+				function (f) { return f instanceof App.NegationNode && f.get("right") instanceof App.AndNode; },
+				dmNotAnd,
+				singleStep ? 1 : Infinity
+			);
+
+			// If we're only doing a single step and it's been done, break out of loop
+			if (singleStep && (formula.toString() !== fString)) { break; }
+
+			// Remove anything with de Morgans Or
+			formula = this.removeAll(
+				formula,
+				function (f) { return f instanceof App.NegationNode && f.get("right") instanceof App.OrNode; },
+				dmNotOr,
+				singleStep ? 1 : Infinity
+			);
+			if (singleStep && (formula.toString() !== fString)) { break; }
+
+			// Remove anything with de Morgans And
+			formula = this.removeAll(
+				formula,
+				function (f) { return f instanceof App.NegationNode && f.get("right") instanceof App.NegationNode; },
+				doubleNeg,
+				singleStep ? 1 : Infinity
+			);
+			if (singleStep && (formula.toString() !== fString)) { break; }
+			
+		} while (formula.toString() !== fString);
+
+		return formula;
+	},
+
+	// Takes an implication free, nnf formula
+	// Returns a formula in cnf
+	conjunctiveNormalForm : function (formula) {
+		var left = formula.get("left"),
+			right = formula.get("right");
+
+		if (formula instanceof App.AndNode) {
+			return new App.AndNode({
+				left : this.conjunctiveNormalForm(left),
+				right : this.conjunctiveNormalForm(right)
+			});
+		} else if (formula instanceof App.OrNode) {
+			return this.distr(this.conjunctiveNormalForm(left),
+							  this.conjunctiveNormalForm(right));
+		} else {
+			return formula;
+		}
+	},
+
+	// Takes left and right in cnf
+	// computes the cnf form for left ∨ right
+	distr : function (left, right) {
+		if (left instanceof App.AndNode) {
+			return new App.AndNode({
+				"left" : this.distr(left.get("left"), right),
+				"right" : this.distr(left.get("right"), right)
+			});
+		} else if (right instanceof App.AndNode) {
+			return new App.AndNode({
+				"left" : this.distr(left, right.get("left")),
+				"right" : this.distr(left, right.get("right"))
+			});
+		} else {
+			return new App.OrNode({ "left" : left, "right" : right })
+		}
 	}
 });
 
@@ -489,7 +815,7 @@ App.EquivalenceRulesView = Backbone.View.extend({
 			}
 			this.$el.append(view.render().el);
 
-		} else { // Add at the top
+		} else { // User EqRule - Add at the top
 			if (header.length === 0) {
 				$("<li class=\"nav-header\">" + eqRule.get("category") + "</li>").insertAfter(this.$("#newEqRuleBtn")).on("click", function () {
 					$(this).nextUntil("li.nav-header").slideToggle();
@@ -2304,6 +2630,259 @@ App.equivalenceRules = new App.EquivalenceRules([
 				right: new App.Node({
 					symbol: "A"
 				})
+			})
+		})]
+	}, {
+		rule: "∀X(A) ≡ A",
+		bidirectional: true,
+		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol: "A"
+			})
+		})],
+
+		rhsTrees: [
+		new App.Node({
+			symbol: "A"
+		})]
+	}, {
+		rule: "∃X(A) ≡ A",
+		bidirectional: true,
+		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol: "A"
+			})
+		})],
+
+		rhsTrees: [
+		new App.Node({
+			symbol: "A"
+		})]
+	}, {
+		rule: "∀X(A ∧ B) ≡ A ∧ ∀X(B)",
+		bidirectional: true,
+		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.AndNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+
+		})],
+
+		rhsTrees: [
+		new App.AndNode({
+			left : new App.Node({
+				symbol : "A"
+			}),
+			right : new App.UniversalQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "B"
+				})
+			})
+		})]
+	}, {
+		rule: "∀X(A ∨ B) ≡ A ∨ ∀X(B)",
+		bidirectional: true,
+		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.OrNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+
+		})],
+
+		rhsTrees: [
+		new App.OrNode({
+			left : new App.Node({
+				symbol : "A"
+			}),
+			right : new App.UniversalQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "B"
+				})
+			})
+		})]
+	}, {
+		rule: "∀X(A → B) ≡ A → ∃∀(B)",
+		bidirectional: true,
+		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.ImplyNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+
+		})],
+
+		rhsTrees: [
+		new App.ImplyNode({
+			left : new App.Node({
+				symbol : "A"
+			}),
+			right : new App.UniversalQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "B"
+				})
+			})
+		})]
+	}, {
+		rule: "∃X(A → B) ≡ A → ∃X(B)",
+		bidirectional: true,
+		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.ImplyNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+
+		})],
+
+		rhsTrees: [
+		new App.ImplyNode({
+			left : new App.Node({
+				symbol : "A"
+			}),
+			right : new App.ExistensialQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "B"
+				})
+			})
+		})]
+	}, {
+		rule: "∀X(A → B) ≡ ∃X(A) → B",
+		bidirectional: true,
+		freeVarCheck : [["X", "B"]], 
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.ImplyNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+
+		})],
+
+		rhsTrees: [
+		new App.ImplyNode({
+			left : new App.ExistensialQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "A"
+				})
+			}),
+			right : new App.Node({
+				symbol : "B"
+			})
+		})]
+	}, {
+		rule: "∃X(A → B) ≡ ∀X(A) → B",
+		bidirectional: true,
+		freeVarCheck : [["X", "B"]],
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.ImplyNode({
+				left : new App.Node({
+					symbol : "A"
+				}),
+				right : new App.Node({
+					symbol : "B"
+				})
+			}),
+
+		})],
+
+		rhsTrees: [
+		new App.ImplyNode({
+			left : new App.UniversalQuantifier({
+				variable : "X",
+				right : new App.Node({
+					symbol : "A"
+				})
+			}),
+			right : new App.Node({
+				symbol : "B"
+			})
+		})]
+	}, {
+		rule : "Rename Variable",
+		bidirectional : false,
+		category: "Predicate Equivalences Involving Bound Variables",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol : "A"
+			})
+		}),
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol : "A"
+			})
+		})],
+		rhsTrees : [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol : "A"
 			})
 		})]
 	}

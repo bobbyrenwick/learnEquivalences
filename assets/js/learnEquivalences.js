@@ -110,8 +110,9 @@ App.init = function () {
 	$(window).unload(function () {
 		if (App.userManager.isLoggedIn()) { // If the user is logged int
 			// Save the state of the current exercise
-			eqRulesView.onUserLoggingOut();
-			App.exerciseManager.getCurrentExercise().save({}, { async : false });
+			// eqRulesView.onUserLoggingOut();
+			// App.exerciseManager.getCurrentExercise().save({}, { async : false });
+			App.vent.trigger("userLoggingOut", { async : false });
 		}
 	});
 

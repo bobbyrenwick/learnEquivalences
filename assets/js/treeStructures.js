@@ -89,6 +89,13 @@ App.Predicate = App.Node.extend({
 		clone = this.clone();
 		clone.set("terms", _.map(clone.get("terms"), function (term) { return term.deepCloneReplace(subToReplace, subToReplaceWith); }));
 		return clone;
+	},
+
+	containsTerm : function (term) {
+		return _.reduce(this.get("terms"), function (memo, t) { 
+			if (!memo) { return t.get("symbol") === term; }
+			else { return memo; }
+		}, false);
 	}
 
 });

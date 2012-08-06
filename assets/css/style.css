@@ -13,8 +13,12 @@ body {
 	cursor: pointer;
 }
 
-#mainAppRow > div, #mainContent {
+#mainAppRow > div, #mainContent, #exercise-view {
 	height: 100%;
+}
+
+#exercise-view {
+	overflow-y: auto;
 }
 
 /* Node highlighting */
@@ -100,6 +104,10 @@ li.answerStep small {
 
 label {
 	font-weight: bold;
+}
+
+label.checkbox {
+	cursor: pointer;
 }
 
 .inputSetWrite, .goalSetWrite {
@@ -278,7 +286,8 @@ svg rect.highlighted {
 	line-height: 18px;
 	font-size: 14px;
 	text-rendering: optimizelegibility;
-	margin: 3px 0;
+	padding: 3px 0;
+	border-bottom: 1px solid #eee;
 }
 
 .exerciseListItem.active {

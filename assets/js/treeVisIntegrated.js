@@ -172,7 +172,6 @@ App.TreeVis.prototype.updateTree = function() {
 		.style("fill-opacity", 0)
 		.style("stroke-opacity", 0)
     	.on("click", function (d) {
-    		console.log("treeVisNodeClick event triggered", self.set, d.id);
     		App.vent.trigger("treeVisNodeClick", self.set, d.id); // Trigger event that tells the exercise the set and cid of model that should be clicked
     	});
 

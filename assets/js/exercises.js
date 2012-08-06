@@ -498,7 +498,21 @@ App.Exercise = Backbone.Model.extend({
 			bwdMatchingPairs = eqRule.isApplicable(-1, node),
 			fwdMatchingPairs = eqRule.isApplicable(1, node);
 
-		if (eqRule.get("bidirectional") && bwdMatchingPairs && fwdMatchingPairs) {
+		if (eqRule.get("rule") === "Rename Variable" && fwdMatchingPairs) {
+			modalView = new App.RenameVariableModalView({
+				model : new App.RenameVariableModal ({
+					"node" : node,
+					"step" : step,
+					"eqRule" : eqRule	
+				})
+			});
+			// Bind events in the modal dialog to functions in this context so that the correct
+			// action can be taken.
+			modalView.on("modalSuccess", this.onModalSuccess, this);
+			modalView.on("modalChooseFail", this.onModalChooseFail, this);
+			// Display the modal dialog
+			modalView.render();
+		} else if (eqRule.get("bidirectional") && bwdMatchingPairs && fwdMatchingPairs) {
 			// If both ways is applicable, need to ask which to apply
 			modalView = new App.EqRuleDirChooseModalView({
 				model : new App.EqRuleDirChooseModal({
@@ -511,13 +525,13 @@ App.Exercise = Backbone.Model.extend({
 			});
 			// Bind events in the modal dialog to functions in this context so that the correct
 			// action can be taken.
-			modalView.bind("modalSuccess", this.onModalSuccess, this);
-			modalView.bind("modalChooseFail", this.onModalChooseFail, this);
+			modalView.on("modalSuccess", this.onModalSuccess, this);
+			modalView.on("modalChooseFail", this.onModalChooseFail, this);
 			// Display the modal dialog
 			modalView.render();
 		} else if (eqRule.get("bidirectional") && bwdMatchingPairs) {
 			// If backwards application requires formula introduction
-			if (eqRule.get("bwdIntroSymbols").length > 0) {
+			if (eqRule.get("bwdIntroSymbols").quantifiers.length  + eqRule.get("bwdIntroSymbols").symbols.length > 0) {
 				// Ask user what formulas should be introduced
 				this.createWffIntroModalView(node, step, eqRule, bwdMatchingPairs, -1);
 			} else {
@@ -525,7 +539,7 @@ App.Exercise = Backbone.Model.extend({
 			}
 		} else if (fwdMatchingPairs) {
 			// If forwards application requires formula introduction
-			if (eqRule.get("fwdIntroSymbols").length > 0) {
+			if (eqRule.get("fwdIntroSymbols").quantifiers.length + eqRule.get("fwdIntroSymbols").symbols.length > 0) {
 				// Ask user what formulas should be introduced
 				this.createWffIntroModalView(node, step, eqRule, fwdMatchingPairs, 1);
 			} else {
@@ -602,7 +616,7 @@ App.Exercise = Backbone.Model.extend({
 	addNewStep : function (newWff, steps, rule, direction, fromStep) {
 		var newStep = new App.Step({
 				node: newWff,
-				rule: rule.get("rule") + " " + (direction > 0 ? "ltr" : "rtl"),
+				rule: rule.get("rule") + " " + (direction > 0 ? "ltr" : (direction === 0 ? "" : "rtl")),
 				no : steps.length + 1,
 				from : fromStep.get("no"),
 				unused : false
@@ -626,8 +640,8 @@ App.Exercise = Backbone.Model.extend({
 		});
 
 		// Bind the modal events to events in this context.
-		modalView.bind("modalSuccess", this.onModalSuccess, this);
-		modalView.bind("modalChooseFail", this.onModalChooseFail, this);
+		modalView.on("modalSuccess", this.onModalSuccess, this);
+		modalView.on("modalChooseFail", this.onModalChooseFail, this);
 		modalView.render();
 	},
 
@@ -637,16 +651,16 @@ App.Exercise = Backbone.Model.extend({
 		this.addNewStep(obj.newWff, obj.steps || this.get("currentlySelectedSteps"), obj.eqRule || this.get("currentlySelectedEqRule"), obj.direction, obj.step || this.get("currentlySelectedStep"));
 		this.checkIfCompleted();
 		this.deselectEqRuleAndNode();
-		obj.modal.unbind("modalChooseFail", this.onModalChooseFail);
-		obj.modal.unbind("modalSuccess", this.onModalSuccess);
+		obj.modal.off("modalChooseFail", this.onModalChooseFail);
+		obj.modal.off("modalSuccess", this.onModalSuccess);
 	},
 
 	onModalChooseFail : function (obj) {
 		// The user closed the modal dialog so it may be they made a mistake
 		// so, deselect the chosen equivalence rule
 		this.deselectEqRule();
-		obj.modal.unbind("modalChooseFail", this.onModalChooseFail);
-		obj.modal.unbind("modalSuccess", this.onModalSuccess);
+		obj.modal.off("modalChooseFail", this.onModalChooseFail);
+		obj.modal.off("modalSuccess", this.onModalSuccess);
 	},
 
 	applyRuleAndAddStep : function (eqRule, direction, matchingPairs, node, step, steps) {
@@ -840,29 +854,32 @@ App.ExerciseView = Backbone.View.extend({
 	},
 
 	onNodeSelected: function (nodeView, step, steps) {
-		if (!nodeView.model.get("selected")) {
-			// If the node clicked on isn't the one that's currently selected.
+		// Should only do something if there is no alert being shown.
+		if (!this.successAlertView) {
+			if (!nodeView.model.get("selected")) {
+				// If the node clicked on isn't the one that's currently selected.
 
-			// If there is a node selected, deselect it.
-			if (this.model.get("currentlySelectedNode")) {
+				// If there is a node selected, deselect it.
+				if (this.model.get("currentlySelectedNode")) {
+					this.model.deselectNode();
+				}
+
+				// Set this node to selected and keep a records of currently selected in the 
+				// Exercise
+
+				nodeView.model.set({ selected: true });
+				this.model.set({
+					currentlySelectedNode: nodeView.model,
+					currentlySelectedStep: step,
+					currentlySelectedSteps: steps
+				});
+
+				this.model.trigger("changeCurrentlySelectedNodeEtc");
+			} else {
+				// The node was previously selected and has been clicked so deselect it!
+				// Update the node and the record in the Exercise.
 				this.model.deselectNode();
 			}
-
-			// Set this node to selected and keep a records of currently selected in the 
-			// Exercise
-
-			nodeView.model.set({ selected: true });
-			this.model.set({
-				currentlySelectedNode: nodeView.model,
-				currentlySelectedStep: step,
-				currentlySelectedSteps: steps
-			});
-
-			this.model.trigger("changeCurrentlySelectedNodeEtc");
-		} else {
-			// The node was previously selected and has been clicked so deselect it!
-			// Update the node and the record in the Exercise.
-			this.model.deselectNode();
 		}
 	},
 
@@ -1012,7 +1029,7 @@ App.ExerciseView = Backbone.View.extend({
 				})
 			});
 
-		writeNextStepModal.bind("modalSuccess", this.model.onModalSuccess, this.model);
+		writeNextStepModal.on("modalSuccess", this.model.onModalSuccess, this.model);
 		writeNextStepModal.render();
 	},
 
@@ -1283,7 +1300,7 @@ App.ExercisesListView = Backbone.View.extend({
 		this.currentExercise.set({ current: false });
 
 		// Only save the exercise if it belongs to a user.
-		if (!this.currentExercise.isNew()) {
+		if (App.userManager.isLoggedIn()) {
 			this.currentExercise.save();
 		}
 
@@ -1455,10 +1472,11 @@ App.ExerciseManager = Backbone.Model.extend({
 		});
 	},
 
-	onUserLoggingOut : function () {
+	onUserLoggingOut : function (options) {
+		var saveOpt = options || { async : true };
 		if (App.exercisesListView.currentExercise) {
 			App.exercisesListView.currentExerciseView.close();
-			App.exercisesListView.currentExercise.save(); // Save the current exercise after closing
+			App.exercisesListView.currentExercise.save({}, saveOpt); // Save the current exercise after closing
 			this.get("exercises").reset(); // Delete all the exercises
 		}
 	}
