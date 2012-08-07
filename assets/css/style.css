@@ -46,6 +46,10 @@ body {
 	border-bottom: 1px solid #EEE;
 }
 
+h1 small {
+	display: block;
+}
+
 .answerSection {
 	margin-top:15px;
 }
@@ -302,4 +306,10 @@ svg rect.highlighted {
 
 .exerciseListItem a {
 	color: inherit;
+}
+
+@media (max-width: 1366px) {
+	li.answerStep small {
+		display : block;
+	}
 }

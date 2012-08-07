@@ -395,12 +395,15 @@ App.Exercise = Backbone.Model.extend({
 		// when node/step/steps is updated - cannot use global change event as this includes other attrs.
 		this.on("change:currentlySelectedEqRule changeCurrentlySelectedNodeEtc", this.onChangeSelections, this);
 
-		if (this.get("exerciseString") === undefined && this.get("undoArray") === undefined) {
+		if (this.get("exerciseString") === undefined && this.get("undoDelObj") === undefined) {
 			this.set({
 				// The equivalence that is to be proved with an equivalence sign in the middle
 				exerciseString : this.get("inputSet").at(0).get("node").toString() + " \u2261 " + this.get("goalSet").at(0).get("node").toString(),
-				// An array that holds references to the steps that were added to - in order to allow for undoing
-				undoArray : []
+				// An array that holds references to the last steps that were deleted.
+				undoDelObj : {
+					stepsDelFrom : "",
+					steps : new App.Steps()
+				}
 			});
 		}
 	},
@@ -553,9 +556,8 @@ App.Exercise = Backbone.Model.extend({
 	},
 
 	checkIfCompleted: function () {
-		var lastStepsStepPair = _.last(this.get("undoArray")),
-			lastAddedSteps = this.get(lastStepsStepPair[0]),
-			lastAddedStep = lastAddedSteps.at(lastStepsStepPair[1]),
+		var lastAddedSteps = this.get(this.get("lastStepsAddedTo")),
+			lastAddedStep = lastAddedSteps.last(),
 			oppositeSet = this.getOppositeSet(lastAddedSteps),
 			lastAddedStepString = lastAddedStep.get("node").toString(),
 			idxOfMatchingStep = -1,
@@ -581,9 +583,8 @@ App.Exercise = Backbone.Model.extend({
 					self.saveCompletedVersion();
 				}
 
-				// Remove all undo steps
-				self.set("undoArray",[]);
-				self.trigger("exerciseCompleted", isPrevSolution); // Triggers the creation of an alert in ExerciseView
+				// Trigger creation of an alert in ExerciseView
+				self.trigger("exerciseCompleted", isPrevSolution); 
 			}
 		});
 	},
@@ -624,8 +625,8 @@ App.Exercise = Backbone.Model.extend({
 
 		// Add the new step to the steps collection
 		steps.add(newStep);
-		// Add a [stepsString, stepPos] pair to the undoArray
-		this.addToUndo(steps);
+
+		this.set("lastStepsAddedTo", steps.getStepsString());
 	},
 
 	createWffIntroModalView : function (node, step, eqRule, matchingPairs, direction) {
@@ -673,38 +674,53 @@ App.Exercise = Backbone.Model.extend({
 		this.deselectEqRuleAndNode();
 	},
 
-	addToUndo : function (steps) {
-		// Add a [stepsString, stepPos] pair to the undoArray
-		this.get("undoArray").push([steps.getStepsString(), steps.length - 1]);
-		if (this.get("undoArray").length === 1) { this.set({ undoAvailable : true }); }
+	resetUndo : function () {
+		this.set({ 
+			undoAvailable : false, 
+			undoDelObj : {
+				stepsDelFrom : "",
+				steps : new App.Steps()
+			} 
+		});
 	},
 
 	undo : function () {
-		var undoArray = this.get("undoArray"),
-			lastPair,
-			stepsString,
-			steps,
-			stepPos;
+		var undoDelObj = this.get("undoDelObj"),
+			steps = this.get(undoDelObj.stepsDelFrom),
+			noUndoSteps = undoDelObj.steps.length,
+			noUndoStepsMinus = noUndoSteps - 1,
+			curNoSteps = steps.length;
 		
 		if (this.get("undoAvailable")) {
-			// Pop off the reference to the last [stepsString, stepPos] pair added.
-			lastPair = undoArray.pop();
-			stepsString = lastPair[0];
-			stepPos = lastPair[1];
-			steps = this.get(stepsString);
-
-			// Removes the last Step from thoses Steps
-			steps.remove(steps.at(stepPos));
 			
-			// If there is nothing else in the undoArray disable the undo feature.
-			if (undoArray.length === 0) { this.set({ undoAvailable : false }); }
-			this.deselectEqRuleAndNode();
+			for (var i = noUndoStepsMinus; i >=0; i--) {
+				var step = undoDelObj.steps.at(i);
+
+				// remove highlight
+				step.set("highlightedDel", false);
+
+				// If this is the first to be readded, just need to change its number
+				if (i === noUndoStepsMinus) {
+					step.set("no", curNoSteps + 1);
+				} else {
+					step.set({
+						no : curNoSteps + 1,
+						from : curNoSteps
+					})
+				}
+
+				// Add the step
+				steps.add(step);
+				curNoSteps++;
+			}
+
+			// Disable the undo feature and reset obj
+			this.resetUndo();
 		}
 	},
 
 	unstack : function (idx) {
-		var undoArray = this.get("undoArray"),
-			steps = this.get("currentlySelectedSteps"),
+		var steps = this.get("currentlySelectedSteps"),
 			stepsString = steps.getStepsString(),
 			i,
 			noSteps = steps.length,
@@ -714,10 +730,17 @@ App.Exercise = Backbone.Model.extend({
 			undoStepToDel,
 			undoStepToDelIdx;
 
+		// If there were some things previously deleted but not undone - discard forever
+		this.resetUndo();
+		this.get("undoDelObj").stepsDelFrom = stepsString;
+
 		for (i = noSteps - 1; i >= 0; i--){ // Working backwards through all the steps
 			if (allStepsIncChildren.indexOf(i) >= 0) { // If i is an index of a step that needs to be deleted.
 
-				// Remove the step
+				// Add a reference to the current step to the undoDelObj
+				this.get("undoDelObj").steps.add(steps.at(i));
+
+				// Remove the step from the current steps
 				steps.remove(steps.at(i)); 
 				noSteps--; 
 				// Walk forward through all of the steps that were in front of this one
@@ -725,35 +748,16 @@ App.Exercise = Backbone.Model.extend({
 					steps.at(j).set("no", steps.at(j).get("no") - 1); // minus one from the number and the from
 				}
 
-				// Find the undoStep that held the step that was removed
-				undoStepToDel =  _.find(undoArray, function (undoStep) { 
-					return undoStep[1] === i && undoStep[0] === stepsString 
-				});
-				// Get the index of the deleted undo step.
-				undoStepToDelIdx = undoArray.indexOf(undoStepToDel);
-				// Delete the undo step
-				undoArray.splice(undoStepToDelIdx,1);
-
-				// For all the undo steps past the deleted one, on this side, minus one from the i.
-				for (j = undoStepToDelIdx; j < undoArray.length; j++) {
-					if (undoArray[j][0] === stepsString) {
-						undoArray[j][1]--;
-					}
-				}
-
-				this.set({
-					undoAvailable : (undoArray.length > 0 ? true : false)
-				})
-
 				this.deselectEqRuleAndNode();
 			}
 		}
+
+		this.set("undoAvailable", true);
 	},
 
 	toJSON : function () {
+		// toJSON is called automatically on all the steps, so no need to call here.
 		var json = _.clone(this.attributes);
-		json.goalSet = json.goalSet.toJSON();
-		json.inputSet = json.inputSet.toJSON();
 		json.currentlySelectedSteps = null;
 		json.currentlySelectedStep = null;
 		json.currentlySelectedNode = null;
@@ -772,6 +776,7 @@ App.Exercise = Backbone.Model.extend({
 		exJSON.goalSet = App.Exercise.stepArrayToSteps(exJSON.goalSet);
 		exJSON.completedInputSet = App.Exercise.stepArrayToSteps(exJSON.completedInputSet);
 		exJSON.completedGoalSet = App.Exercise.stepArrayToSteps(exJSON.completedGoalSet);
+		exJSON.undoDelObj.steps = App.Exercise.stepArrayToSteps(exJSON.undoDelObj.steps);
 		return exJSON;
 	},
 
@@ -842,7 +847,7 @@ App.ExerciseView = Backbone.View.extend({
 		this.$el.append(this.goalSetView.render().$el);
 
 		this.$('.btn-unstack').tooltip({
-			title : "This will remove all steps highlighted in red. Be warned - this cannot be undone.",
+			title : "This will remove all steps highlighted in red. Be warned - only the last delete can be undone at any time.",
 			placement : "bottom",
 			trigger : "manual"
 		});
@@ -1477,7 +1482,10 @@ App.ExerciseManager = Backbone.Model.extend({
 		if (App.exercisesListView.currentExercise) {
 			App.exercisesListView.currentExerciseView.close();
 			App.exercisesListView.currentExercise.save({}, saveOpt); // Save the current exercise after closing
-			this.get("exercises").reset(); // Delete all the exercises
+		} else if (App.exercisesListView.currentSolution){
+			App.exercisesListView.currentSolutionView.close();
 		}
+		
+		this.get("exercises").reset(); // Delete all the exercises
 	}
 });

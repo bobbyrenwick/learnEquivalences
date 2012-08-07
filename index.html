@@ -288,8 +288,8 @@
 	<script id="exerciseTemplate" type="text/template">
 	  <div class="exerciseHeader">
 		<div class="btn-group pull-right">
-		  <button class="btn btn-inverse btn-undo" <% if(!undoAvailable) print("disabled"); %>><i class="icon-circle-arrow-left icon-white"></i> Undo</button>
 		  <button class="btn btn-inverse btn-unstack" <% if(!unstackAvailable) print("disabled"); %>><i class="icon-remove-sign icon-white"></i> Delete Step</button>
+		  <button class="btn btn-inverse btn-undo" <% if(!undoAvailable) print("disabled"); %>><i class="icon-circle-arrow-left icon-white"></i> Undo Delete</button>
 		</div>
 		<h1>Exercise&nbsp;<small><%= exerciseString %></small></h1>
 	  </div>
