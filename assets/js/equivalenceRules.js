@@ -32,6 +32,13 @@ App.EquivalenceRule = Backbone.Model.extend({
 		}
 	},
 
+	alwaysApplicable : function (dir) {
+		var tree = (dir > 0 ? this.get("lhsTrees")[0] : this.get("rhsTrees")[0]),
+			symbol = tree.get("symbol");
+
+		return /^[A-Z]$/.test(symbol);
+	},
+
 	createCommutativeVersions: function () {
 		var oldSideLength, startFrom, newSideLength, sides = ["lhsTrees", "rhsTrees"],
 			self = this;
@@ -285,9 +292,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 		// Keep going till we hit a node
 		if (tree instanceof App.BinaryNode) {
 			tree.set({
-				"left": App.EquivalenceRule.replaceSubsInTree(tree.get("left"), matchedPairs)
-			});
-			tree.set({
+				"left": App.EquivalenceRule.replaceSubsInTree(tree.get("left"), matchedPairs),
 				"right": App.EquivalenceRule.replaceSubsInTree(tree.get("right"), matchedPairs)
 			});
 		} else if (tree instanceof App.UnaryNode) {
@@ -302,7 +307,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 			// Try to find the atom in matchedPairs
 			for (i = 0; i < noPairs; i++) {
 				// The atom has been found in the list so replace this leaf with a copy of the sub-formula
-				if (matchedPairs.atomPairs[i][0].toString() === tree.toString()) {
+				if (matchedPairs.atomPairs[i][0].toString() === tree.toString()) { // TODO: maybe replace this with matching trees.
 					return matchedPairs.atomPairs[i][1].deepClone();
 				}
 			}
