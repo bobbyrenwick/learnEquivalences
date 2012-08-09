@@ -8,7 +8,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 
 	url : "api/eqRule",
 
-	// MongoDB's idAttribute is _id
+	// MongoDB's idAttrAttrAttribute is _id
 	idAttribute: "_id",
 
 	initialize: function () {
@@ -128,6 +128,31 @@ App.EquivalenceRule = Backbone.Model.extend({
 		return false;
 	},
 
+	// Same as above but formula is normal - not a backbone model
+	isApplicableQuick : function (direction, formula) {
+		var i, trees = (direction < 0 ? this.get("rhsTrees") : this.get("lhsTrees")),
+			noTrees = trees.length,
+			applicable = false,
+			matchingPairs;
+
+		for (i = 0; i < noTrees; i++) {
+			
+			matchingPairs = {
+				atomPairs : [],
+				quantifierPairs : []
+			};
+			
+			if (App.EquivalenceRule.formulaMatchesTreeQuick(formula, trees[i], matchingPairs)) {
+				// We have found a rule that is applicable, so if needed, check any variables don't occur free.
+				if (!this.get("freeVarCheck") || this.passesFreeVarTest(formula, matchingPairs)) {
+					return matchingPairs;
+				}
+			}
+		}
+		// If it never matched any of the lhs trees then return false
+		return false;
+	},
+
 	// Applys the rule to the subToReplace and replaces it within the whole formula - returns a new tree 
 	// that puts matchingPairs into a copy of the first of rhs(lhs)Trees for fwd(bwd).
 	// direction - > 0 for fwds, < 0 for bwds
@@ -143,6 +168,17 @@ App.EquivalenceRule = Backbone.Model.extend({
 
 		subToReplace.set("selected", false);
 		subToReplaceWith = App.EquivalenceRule.replaceSubsInTree(tree, matchingPairs);
+
+		return whole.deepCloneReplace(subToReplace, subToReplaceWith);
+	},
+
+	applyRuleQuick : function (direction, matchingPairs, subToReplace, whole, tNo) {
+		var treeNo = tNo || 0,
+			tree = (direction < 0 ? this.get("lhsTrees")[treeNo].deepClone() : this.get("rhsTrees")[treeNo].deepClone()),
+			tree = App.backboneToNormal(tree),
+			subToReplaceWith;
+
+		subToReplaceWith = App.EquivalenceRule.replaceSubsInTreeQuick(tree, matchingPairs);
 
 		return whole.deepCloneReplace(subToReplace, subToReplaceWith);
 	},
@@ -283,6 +319,73 @@ App.EquivalenceRule = Backbone.Model.extend({
 		return true;
 	},
 
+	// Same as above but formula is a normal js obj, not a backbone model
+	formulaMatchesTreeQuick: function (formula, tree, matchingPairs) {
+		var i, noAtomPairs = matchingPairs.atomPairs.length, noQuantifierPairs = matchingPairs.quantifierPairs.length;
+
+		if (tree instanceof App.BinaryNode) {
+			// the the top level structure of the tree is the same keep matching
+			if (formula instanceof App.BinaryNodeNormal && formula.symbol === tree.attributes.symbol) {
+				// match recursively the left and right, if either returns false, then whole function should return false
+				if (!App.EquivalenceRule.formulaMatchesTreeQuick(formula.left, tree.attributes.left, matchingPairs)) {
+					return false;
+				}
+				if (!App.EquivalenceRule.formulaMatchesTreeQuick(formula.right, tree.attributes.right, matchingPairs)) {
+					return false;
+				}
+			} else {
+				return false;
+			}
+		} else if (tree instanceof App.UnaryNode) {
+			// match recursively right, if it returns false, then whole function should return false
+			if (formula instanceof App.UnaryNodeNormal && formula.symbol === tree.attributes.symbol) {
+				if (!App.EquivalenceRule.formulaMatchesTreeQuick(formula.right, tree.attributes.right, matchingPairs)) {
+					return false;
+				} else if (formula instanceof App.Quantifier) { // need to also check that the quantifier variable of the rule has matched
+						
+						for (i = 0; i < noQuantifierPairs; i++) {
+							if (matchingPairs.quantifierPairs[i][0] === tree.attributes.variable) {
+								if (matchingPairs.quantifierPairs[i][1] !== formula.variable) {
+									return false;
+								} else { // the matching pair found this time is the same as the other times it has been found.
+									return true;
+								}
+							}
+						}
+
+						// If not already matched just store new [ruleSymbol, formulaQuantVariable] pair
+						matchingPairs.quantifierPairs.push([tree.attributes.variable, formula.variable]);
+						return true;
+				}
+			} else {
+				return false;
+			}
+		} else if (tree instanceof App.Tautology) {
+			// As long as the formula is also a tautology this is fine but it shouldn't be added to the matching pairs
+			return formula instanceof App.TautologyNormal;
+		} else if (tree instanceof App.Contradiction) {
+			// As long as the formula is also a contradiction this is fine but it shouldn't be added to the matching pairs
+			return formula instanceof App.ContradictionNormal;
+		} else {
+			// Reached an atom - go through the matching [ruleSymbol, subFormula] pairs. If the symbol
+			// has already been matched to a sub formula - formula needs to be the same as the previously 
+			// matched sub formula.
+			for (i = 0; i < noAtomPairs; i++) {
+				if (matchingPairs.atomPairs[i][0].toString() === tree.toString()) {
+					if (matchingPairs.atomPairs[i][1].toString() !== formula.toString()) {
+						return false;
+					} else { // the matching pair found this time is the same as the other times it has been found.
+						return true;
+					}
+				}
+			}
+			// If not already matched just store new [ruleSymbol, subFormula] pair
+			matchingPairs.atomPairs.push([tree, formula]);
+			return true;
+		}
+		return true;
+	},
+
 	// tree is a copy of the tree representation of the other side of an equivalence rule that has been chosen
 	// matchingPairs contains [rule symbol, sub-formula] pairs - need to deepClone the sub-formula parts of these
 	// to ensure we have new objects rather than references to the old ones
@@ -302,6 +405,35 @@ App.EquivalenceRule = Backbone.Model.extend({
 
 			if (tree instanceof App.Quantifier) {
 				tree.set("variable", _.find(matchedPairs.quantifierPairs, function (pair) { return pair[0] === tree.get("variable") })[1])
+			}
+		} else { // We have found an atom
+			// Try to find the atom in matchedPairs
+			for (i = 0; i < noPairs; i++) {
+				// The atom has been found in the list so replace this leaf with a copy of the sub-formula
+				if (matchedPairs.atomPairs[i][0].toString() === tree.toString()) { // TODO: maybe replace this with matching trees.
+					return matchedPairs.atomPairs[i][1].deepClone();
+				}
+			}
+
+			return tree;
+		}
+		return tree;
+	},
+
+	// tree is a copy of the tree representation of the other side of an equivalence rule that has been chosen
+	// matchingPairs contains [rule symbol, sub-formula] pairs - need to deepClone the sub-formula parts of these
+	// to ensure we have new objects rather than references to the old ones
+	replaceSubsInTreeQuick: function (tree, matchedPairs) {
+		var i, noPairs = matchedPairs.atomPairs.length;
+
+		// Keep going till we hit a node
+		if (tree instanceof App.BinaryNodeNormal) {
+			tree.left = App.EquivalenceRule.replaceSubsInTreeQuick(tree.left, matchedPairs);
+			tree.right = App.EquivalenceRule.replaceSubsInTreeQuick(tree.right, matchedPairs);
+		} else if (tree instanceof App.UnaryNodeNormal) {
+			tree.right = App.EquivalenceRule.replaceSubsInTreeQuick(tree.right, matchedPairs);
+			if (tree instanceof App.Quantifier) {
+				tree.variable = _.find(matchedPairs.quantifierPairs, function (pair) { return pair[0] === tree.variable; })[1];
 			}
 		} else { // We have found an atom
 			// Try to find the atom in matchedPairs

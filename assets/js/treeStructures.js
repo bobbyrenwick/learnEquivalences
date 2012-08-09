@@ -171,21 +171,21 @@ App.UnaryNode = App.Node.extend({
 
 	deepCloneObj: function () {
 		return {
-			right: this.get("right").deepClone(),
-			variable : this.get("variable")
+			right: this.attributes.right.deepClone(),
+			variable : this.attributes.variable
 		};
 	},
 
 	deepCloneReplaceObj: function (subToReplace, subToReplaceWith) {
 		return {
-			right: this.get("right").deepCloneReplace(subToReplace, subToReplaceWith),
-			variable : this.get("variable")
+			right: this.attributes.right.deepCloneReplace(subToReplace, subToReplaceWith),
+			variable : this.attributes.variable
 		};
 	},
 
 	getSubFormulae: function (arr) {
 		arr.push(this);
-		this.get("right").getSubFormulae(arr);
+		this.attributes.right.getSubFormulae(arr);
 		return;
 	}
 });
