@@ -149,8 +149,8 @@ App.Steps = Backbone.Collection.extend({
 		// Get the indices of all the steps used
 		idxCameFrom = this.at(idx).get("from");
 
-		if (idxCameFrom != null) {
-			steps.push(this.length - 1);
+		if (idxCameFrom !== null) {
+			steps.push(idx);
 		}
 
 		while (idxCameFrom !== null) {
@@ -326,7 +326,7 @@ App.AlertView = Backbone.View.extend({
 
 	attributes: function () {
 		return {
-			"class": "alert alert-block fade in " + this.model.get("type")
+			"class": "alert alert-block " + this.model.get("type")
 		};
 	},
 
@@ -363,7 +363,24 @@ App.AlertView = Backbone.View.extend({
 				self.$el.alert("close");
 			}, this.model.get("delay"));
 		}
+
+		/*if (this.model.get("progress")) {
+			this.increaseProg();
+		}*/
+
 		return this;
+	},
+
+	increaseProg : function () {
+		var width = 0,
+			$bar = this.$("div.bar");
+
+		(function inc() {
+			var newWidth = parseInt($bar[0].style.width) + 10;
+			$bar[0].style.width = newWidth + "%";
+
+			if (newWidth < 100) { setTimeout(inc, 1000); }
+		})();
 	}
 });
 
@@ -384,6 +401,7 @@ App.Exercise = Backbone.Model.extend({
 		currentlySelectedSteps : null,
 		undoAvailable : false,
 		unstackAvailable : false,
+		hintAvailable : true,
 		completed : false,
 		completedInputSet : null,
 		completedGoalSet : null
@@ -479,6 +497,7 @@ App.Exercise = Backbone.Model.extend({
 			currentlySelectedSteps: null
 		});
 		this.trigger("changeCurrentlySelectedNodeEtc");
+		App.vent.trigger("formulaDeselected");
 	},
 
 	getOppositeSet: function (set) {
@@ -656,6 +675,12 @@ App.Exercise = Backbone.Model.extend({
 		obj.modal.off("modalSuccess", this.onModalSuccess);
 	},
 
+	onHintSuccess : function (obj) {
+		this.addNewStep(obj.newWff, obj.steps || this.get("currentlySelectedSteps"), obj.eqRule || this.get("currentlySelectedEqRule"), obj.direction, obj.step || this.get("currentlySelectedStep"));
+		this.checkIfCompleted();
+		this.deselectEqRuleAndNode();
+	},
+
 	onModalChooseFail : function (obj) {
 		// The user closed the modal dialog so it may be they made a mistake
 		// so, deselect the chosen equivalence rule
@@ -796,6 +821,7 @@ App.ExerciseView = Backbone.View.extend({
 	template : _.template($("#exerciseTemplate").html()),
 
 	events : {
+		"click .btn-hint" : "onHintClick",
 		"click .btn-undo" : "onUndoClick",
 		"click .btn-unstack" : "onUnstackClick",
 		"mouseenter .btn-unstack" : "onUnstackMouseenter",
@@ -880,6 +906,7 @@ App.ExerciseView = Backbone.View.extend({
 				});
 
 				this.model.trigger("changeCurrentlySelectedNodeEtc");
+				App.vent.trigger("formulaSelected", nodeView.model);
 			} else {
 				// The node was previously selected and has been clicked so deselect it!
 				// Update the node and the record in the Exercise.
@@ -917,9 +944,10 @@ App.ExerciseView = Backbone.View.extend({
 				model : new App.Alert({
 					heading: "Not Applicable",
 					body: "Unfortunately the equivalence rule you selected is not applicable to the selected sub-formula. Please try another.",
-					type: "", // normal yellow
+					type: "fade in", // normal yellow
 					closable: true,
-					delay: 4000
+					delay: 4000,
+					progress : false
 				})
 			});
 
@@ -935,9 +963,10 @@ App.ExerciseView = Backbone.View.extend({
 				model : new App.Alert({
 					heading : "Exercise Complete",
 					body : "You have successfully completed the exercise. Any unused steps have been crossed out. The solution has been saved and can be accessed by clicking the eye next to the exercise.",
-					type : "alert-success", // green for success
+					type : "alert-success fade in", // green for success
 					closable : false,
-					delay : false		
+					delay : false,
+					progress : false	
 				})
 			});
 		} else { // Create an alert view that gives the user the option to save this new solution.
@@ -950,10 +979,11 @@ App.ExerciseView = Backbone.View.extend({
 				model : new App.Alert({
 					heading : "Exercise Completed Again",
 					body : "You have successfully completed the exercise again. Would you like to overwrite your previous solution?",
-					type : "alert-info", // blue for success
+					type : "alert-info fade in", // blue for success
 					closable : false,
 					delay : false,
-					buttons : [["Overwrite", "btn btn-info"], ["No thanks.", "btn btn-no"]]
+					buttons : [["Overwrite", "btn btn-info"], ["No thanks.", "btn btn-no"]],
+					progress : false
 					// [btn text, btn classes]
 				}),
 
@@ -978,7 +1008,7 @@ App.ExerciseView = Backbone.View.extend({
 		this.$('.writeBtns').addClass("hide");
 	},
 
-	onChangeUndoAvailable: function () {
+	onChangeUndoAvailable : function () {
 		if (this.model.get("undoAvailable")) {
 			this.$(".btn-undo").removeAttr("disabled");
 		} else {
@@ -988,6 +1018,64 @@ App.ExerciseView = Backbone.View.extend({
 
 	onUndoClick : function () {
 		this.model.undo();
+	},
+
+	onHintClick : function () {
+		if (!this.successAlertView) {
+			// Generate an alert that says a hint is being created.
+			var hintAlertView = new App.AlertView({
+					model : new App.Alert({
+						heading : "Generating Hint",
+						body : "Please wait while we find the next best step for you.",
+						type : "alert-info", // blue for success
+						closable : false,
+						delay : false,
+						progress : true
+					})
+				}),
+				lastInputFormula = this.model.get("inputSet").last().get("node"),
+				lastGoalFormula = this.model.get("goalSet").last().get("node"),
+				prob = new App.Problem(App.backboneToNormal(lastInputFormula),
+									   App.backboneToNormal(lastGoalFormula)),
+				newStep,
+				stepsToAddTo,
+				solution
+				self = this;
+
+			this.$("div.inputSetWrite").after(hintAlertView.render().$el);
+
+			// Give a timeout in order for the alertview to be given time to render
+			setTimeout(function () {
+				solution = App.breadthFirstSearchBothDirectionsHashPrTimed(prob);
+
+				if (typeof solution === "string") { // We know something has gone wrong
+					hintAlertView.$el.text(solution);
+					setTimeout(function () { hintAlertView.$el.alert("close"); }, 3000);
+				} else {
+
+					if (solution instanceof App.OneSidedSolution) {
+						newStep = solution.fwdSideArr ? solution.fwdSideArr[1] : solution.bwdSideArr[1];
+						stepsToAddTo = solution.fwdSideArr ? self.model.get("inputSet") : self.model.get("goalSet");
+					} else if (solution.fwdSideArr >= solution.bwdSideArr) {
+						newStep = solution.fwdSideArr[1];
+						stepsToAddTo = self.model.get("inputSet");
+					} else {
+						newStep = solution.bwdSideArr[1];
+						stepsToAddTo = self.model.get("goalSet");
+					}
+
+					hintAlertView.$el.alert("close");
+
+					self.model.onHintSuccess({
+						newWff : newStep.backboneState,
+						steps : stepsToAddTo,
+						eqRule : newStep.eqRule,
+						direction : newStep.direction,
+						step : stepsToAddTo.last()
+					});
+				}
+			}, 10);
+		}
 	},
 
 	onChangeUnstackAvailable: function () {
@@ -1030,7 +1118,8 @@ App.ExerciseView = Backbone.View.extend({
 	createWriteNextStepModalView : function (set) {
 		var writeNextStepModal = new App.WriteNextStepModalView({
 				model : new App.WriteNextStepModal({
-					steps : this.model.get(set)
+					steps : this.model.get(set),
+					lastStep : this.model.get("currentlySelectedStep")
 				})
 			});
 
@@ -1039,12 +1128,12 @@ App.ExerciseView = Backbone.View.extend({
 	},
 
 	onInputSetWrite : function () {
-		this.model.deselectEqRuleAndNode();
+		this.model.deselectEqRule();
 		this.createWriteNextStepModalView("inputSet");
 	},
 
 	onGoalSetWrite : function () {
-		this.model.deselectEqRuleAndNode();
+		this.model.deselectEqRule();
 		this.createWriteNextStepModalView("goalSet");
 	},
 
@@ -1487,5 +1576,109 @@ App.ExerciseManager = Backbone.Model.extend({
 		}
 		
 		this.get("exercises").reset(); // Delete all the exercises
+	}
+});
+
+
+// Generates formulae in normal js objects for speed
+App.ExerciseGenerator = Backbone.Model.extend({
+
+	initialize : function () {
+		this.set({
+			"atoms" : ["P", "Q", "R", "S", "T", "U", "V", "W"],
+			"predicates" : ["a", "b" , "c", "d", "e", "f", "g", "h"],
+			"constructors" : [App.NegationNodeNormal, App.AndNodeNormal, App.OrNodeNormal, App.ImplyNodeNormal, App.DimplyNodeNormal]
+		});
+	},
+
+	// noDiffAtoms - min 0, max 8
+	generatePropExercise : function (noConnectives, noDiffAtoms) {
+		var possAtoms = _.first(this.get("atoms"), noDiffAtoms),
+			level = 1,
+			allFormulae = {};
+
+		// Generate all the atoms that can be done
+		allFormulae[0] = _.map(possAtoms, function (atom) {
+			return (typeof atom === "string" ? new App.NodeNormal(atom) : new atom);
+		});
+
+
+		while (level <= noConnectives) {
+			allFormulae[level] = this.generateAllFormulae(level, allFormulae, possAtoms);
+			level++;
+		}
+
+		return allFormulae
+	},
+
+	generateAllFormulae : function (level, allFormulae, possAtoms) {
+		var prevLvl = allFormulae[level -1],
+			noPrevFormulae = prevLvl.length,
+			thisLvl = [],
+			noConstructors = this.get("constructors").length,
+			self = this;
+
+		_.each(prevLvl, function (prevFormula) {
+			// Pick a random connective to be head of the tree.
+			var newRoot = self.get("constructors")[App.getRandomInt(0, noConstructors -1)],
+				newFormula;
+
+			if (newRoot.prototype.takes === 2) {
+				newFormula = new newRoot(prevFormula,
+										(level === 1 ? prevLvl[App.getRandomInt(0, noPrevFormulae - 1)] :
+										 allFormulae[0][App.getRandomInt(0, allFormulae[0].length - 1)])
+				);
+			} else if (newRoot.prototype.takes === 1) {
+				newFormula = new newRoot(prevFormula);
+			}
+
+			// Add the new formula to this level
+			thisLvl.push(newFormula);
+		});
+
+		return thisLvl;
+	},
+
+	generateEquivalentFormula : function (formula, steps) {
+		var stepsTaken = 0,
+			subF,
+			curSubF,
+			applicableRules,
+			resultingFormulae,
+			eqRule,
+			dir,
+			matchingPairs;
+
+		for (var stepsTaken = 0; stepsTaken < steps; stepsTaken++) {
+			// Reset resulting formulae
+			resultingFormulae = [];
+
+			// Get all subformulae of current formula
+			subF = [];
+			formula.getSubFormulae(subF);
+
+			// Pick a random subformula
+			curSubF = subF[App.getRandomInt(0, subF.length - 1)];
+
+			// Find all the applicable rules for the subF
+			applicableRules = App.findApplicableEqRules(curSubF);
+
+			// Add all the formulae that result from the application of the rules to resultingFormulae
+			for (i = 0; i < applicableRules.length; i++) { // For both rules that are applicable fwds and bwds.
+				for (j = 0, l = applicableRules[i].length; j < l; j++) { 
+					eqRule = applicableRules[i][j];
+					dir = (i === 0 ? 1 : -1); // If on first array of applicable rules then we're going fwds.
+					matchingPairs = eqRule.isApplicableQuick(dir, curSubF);
+
+					// TODO: use an object to check that this hasn't already been looked at
+					resultingFormulae.push(eqRule.applyRuleQuick(dir, matchingPairs, curSubF, formula));
+				}
+			}
+
+			if (resultingFormulae.length === 0) { debugger; return "error"; }
+			// Set formula to equal a random one of resulting formulae.
+			formula = resultingFormulae[App.getRandomInt(0, resultingFormulae.length - 1)];
+
+		}
 	}
 });

@@ -20,10 +20,19 @@ App.backboneToNormal = function (formula) {
 		return new App.TautologyNormal();
 	} else if (formula instanceof App.Contradiction) {
 		return new App.ContradictionNormal();
+	} else if (formula instanceof App.UniversalQuantifier) {
+		return new App.UniversalQuantifierNormal(formula.get("variable"), App.backboneToNormal(formula.get("right")));
+	} else if (formula instanceof App.ExistensialQuantifier) {
+		return new App.ExistensialQuantifierNormal(formula.get("variable"), App.backboneToNormal(formula.get("right")));
+	} else if (formula instanceof App.Predicate) {
+		var backboneTerms = _.map(formula.get("terms"), function (term) {
+			return App.backboneToNormal(term);
+		});
+		return new App.PredicateNormal(formula.get("symbol"), backboneTerms);
 	} else { // formula is a node
 		return new App.NodeNormal(formula.get("symbol"));
 	}
-}
+};
 
 App.NodeNormal = function (symbol) {
 	// defaults
@@ -46,7 +55,39 @@ App.NodeNormal.prototype = {
 		if (this === subToReplace) { return subToReplaceWith; }
 		return _.clone(this);
 	}
+
 };
+
+App.PredicateNormal = function (symbol, terms) {
+	this.precedence = 10000;
+	this.symbol = symbol;
+	this.terms = terms;
+};
+
+App.PredicateNormal.prototype = new App.NodeNormal();
+
+App.PredicateNormal.prototype.toString = function () {
+	return this.symbol + "(" + this.terms.join(", ") + ")";
+};
+
+App.PredicateNormal.prototype.deepClone = function () {
+	var cloneTerms = _.map(this.terms, function (term) { return term.deepClone(); });
+	return new App.PredicateNormal(this.symbol, cloneTerms);
+};
+
+App.PredicateNormal.prototype.deepCloneReplace = function (subToReplace, subToReplaceWith) {
+	var cloneTerms;
+	if (this === subToReplace) { return subToReplaceWith; }
+	cloneTerms = _.map(this.terms, function (term) { return term.deepClone(); });
+	return new App.PredicateNormal(this.symbol, cloneTerms);	
+};
+
+App.PredicateNormal.prototype.containsTerm = function (term) {
+	return _.reduce(this.terms, function (memo, t) {
+		if (!memo) { return t.symbol === term; }
+		else { return memo; }
+	}, false);
+}
 
 App.ContradictionNormal = function () {
 	this.symbol = "⊥";
@@ -96,7 +137,9 @@ App.UnaryNodeNormal.prototype = {
 
 	deepCloneReplaceRight : function (subToReplace, subToReplaceWith) {
 		return this.right.deepCloneReplace(subToReplace, subToReplaceWith);
-	}
+	},
+
+	takes : 1
 };
 
 App.NegationNodeNormal = function (right) {
@@ -114,8 +157,66 @@ App.NegationNodeNormal.prototype.deepClone = function () {
 
 App.NegationNodeNormal.prototype.deepCloneReplace = function (subToReplace, subToReplaceWith) {
 	if (this === subToReplace) { return subToReplaceWith; }
-	return new App.NegationNodeNormal(this.deepCloneRight());
+	return new App.NegationNodeNormal(this.deepCloneReplaceRight(subToReplace, subToReplaceWith));
 };
+
+App.QuantifierNormal = function () {};
+
+App.QuantifierNormal.prototype = new App.UnaryNodeNormal();
+
+App.QuantifierNormal.prototype.toString = function () {
+	var str = "",
+		rightIsQuantifier = this.right instanceof App.QuantifierNormal;
+
+	str += this.symbol;
+	str += this.variable;
+	if (!rightIsQuantifier) {
+		str += "(";
+	}
+	str += this.right.toString();
+	if (!rightIsQuantifier) {
+		str += ")";
+	}
+
+	return str;
+};
+
+App.UniversalQuantifierNormal = function (variable, right) {
+	this.symbol = "∀";
+	this.precedence = 9000;
+	this.variable  = variable;
+	this.right = right;
+};
+
+App.UniversalQuantifierNormal.prototype = new App.QuantifierNormal();
+
+App.UniversalQuantifierNormal.prototype.deepClone = function () {
+	return new App.UniversalQuantifierNormal(this.variable, this.deepCloneRight());
+};
+
+App.UniversalQuantifierNormal.prototype.deepCloneReplace = function (subToReplace, subToReplaceWith) {
+	if (this === subToReplace) { return subToReplaceWith; }
+	return new App.UniversalQuantifierNormal(this.variable, this.deepCloneReplaceRight(subToReplace, subToReplaceWith));
+};
+
+App.ExistensialQuantifierNormal = function (variable, right) {
+	this.symbol = "∃";
+	this.precedence = 9000;
+	this.variable  = variable;
+	this.right = right;
+};
+
+App.ExistensialQuantifierNormal.prototype = new App.QuantifierNormal();
+
+App.ExistensialQuantifierNormal.prototype.deepClone = function () {
+	return new App.ExistensialQuantifierNormal(this.variable, this.deepCloneRight());
+};
+
+App.ExistensialQuantifierNormal.prototype.deepCloneReplace = function (subToReplace, subToReplaceWith) {
+	if (this === subToReplace) { return subToReplaceWith; }
+	return new App.ExistensialQuantifierNormal(this.variable, this.deepCloneReplaceRight(subToReplace, subToReplaceWith));
+};
+
 
 App.BinaryNodeNormal = function () {};
 
@@ -169,7 +270,9 @@ App.BinaryNodeNormal.prototype = {
 
 	deepCloneReplaceLeft : function (subToReplace, subToReplaceWith) {
 		return this.left.deepCloneReplace(subToReplace, subToReplaceWith);
-	}
+	},
+
+	takes : 2
 };
 
 App.AndNodeNormal = function (left, right) {

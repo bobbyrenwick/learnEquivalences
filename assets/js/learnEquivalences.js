@@ -42,6 +42,14 @@ App.toRomanNumerals = function (num) {
 	} else return null;
 }
 
+/**
+ * Returns a random integer between min and max
+ * Using Math.round() will give you a non-uniform distribution!
+ */
+App.getRandomInt = function(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 App.hasLowerCase = function (str) {
     return str.toUpperCase() != str;
 }

@@ -48,6 +48,8 @@ App.Node = Backbone.Model.extend({
 		}
 		return this.clone();
 	}
+}, {
+	takes : 0
 });
 
 App.Predicate = App.Node.extend({
@@ -131,6 +133,8 @@ App.Contradiction = App.Constant.extend({
 		terms : null,
 		variable : null
 	}
+}, {
+	takes : 0
 });
 
 App.Tautology = App.Constant.extend({
@@ -144,6 +148,8 @@ App.Tautology = App.Constant.extend({
 		terms : null,
 		variable : null
 	}
+}, {
+	takes : 0
 });
 
 App.UnaryNode = App.Node.extend({
@@ -277,6 +283,8 @@ App.NegationNode = App.UnaryNode.extend({
 		}
 		return new App.NegationNode(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));
 	}
+}, {
+	takes : 1
 });
 
 App.BinaryNode = App.Node.extend({
@@ -360,6 +368,8 @@ App.AndNode = App.BinaryNode.extend({
 		return new App.AndNode(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));
 	}
 
+}, {
+	takes : 2
 });
 
 App.OrNode = App.BinaryNode.extend({
@@ -386,6 +396,8 @@ App.OrNode = App.BinaryNode.extend({
 		return new App.OrNode(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));
 	}
 
+}, {
+	takes : 2
 });
 
 App.ImplyNode = App.BinaryNode.extend({
@@ -411,6 +423,8 @@ App.ImplyNode = App.BinaryNode.extend({
 		}
 		return new App.ImplyNode(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));
 	}
+}, {
+	takes : 2
 });
 
 App.DimplyNode = App.BinaryNode.extend({
@@ -436,6 +450,8 @@ App.DimplyNode = App.BinaryNode.extend({
 		}
 		return new App.DimplyNode(this.deepCloneReplaceObj(subToReplace, subToReplaceWith));
 	}
+}, {
+	takes : 2
 });
 
 App.NodeView = Backbone.View.extend({

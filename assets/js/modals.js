@@ -521,8 +521,10 @@ App.NewEqRuleModalView = App.ModalView.extend({
 
 
 /* This is a modal for writing the next step in a proof.
-	Supplied with steps - a reference to the steps collection that should be added to.
-		*/
+	Supplied with {
+		steps - a reference to the steps collection that should be added to.
+		lastStep? - a 
+*/
 App.WriteNextStepModal = Backbone.Model.extend({
 	defaults: {
 		result: false,
@@ -530,7 +532,9 @@ App.WriteNextStepModal = Backbone.Model.extend({
 	},
 
 	initialize: function () {
-		this.set("lastStep", this.get("steps").last());
+		if (!this.get("lastStep")) {
+			this.set("lastStep", this.get("steps").last());
+		}
 	}
 
 });
@@ -617,7 +621,7 @@ App.WriteNextStepModalView = App.InExerciseModalView.extend({
 			"direction": this.model.get("eqRuleApplied").direction,
 			"eqRule": this.model.get("eqRuleApplied").rule,
 			"steps": this.model.get("steps"),
-			"step" : this.model.get("steps").last(),
+			"step" : this.model.get("lastStep"),
 			modal: this
 		});
 		this.close();

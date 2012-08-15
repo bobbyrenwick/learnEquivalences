@@ -3,7 +3,8 @@ var App = App || {};
 App.EquivalenceRule = Backbone.Model.extend({
 	defaults: {
 		active: false,
-		freeVarCheck: false
+		freeVarCheck: false,
+		isCurApplicable : false
 	},
 
 	url : "api/eqRule",
@@ -30,13 +31,17 @@ App.EquivalenceRule = Backbone.Model.extend({
 			// Create all the commutative versions needed for rule checking
 			this.createCommutativeVersions();
 		}
+
+		if (this.get("probabilities") === undefined) {
+			this.set("probabilities", [0.8,0.8]);
+		}
 	},
 
 	alwaysApplicable : function (dir) {
 		var tree = (dir > 0 ? this.get("lhsTrees")[0] : this.get("rhsTrees")[0]),
 			symbol = tree.get("symbol");
 
-		return /^[A-Z]$/.test(symbol);
+		return /^[A-Z]$/.test(symbol) || this.get("rule")[0] === "R";
 	},
 
 	createCommutativeVersions: function () {
@@ -144,7 +149,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 			
 			if (App.EquivalenceRule.formulaMatchesTreeQuick(formula, trees[i], matchingPairs)) {
 				// We have found a rule that is applicable, so if needed, check any variables don't occur free.
-				if (!this.get("freeVarCheck") || this.passesFreeVarTest(formula, matchingPairs)) {
+				if (!this.get("freeVarCheck") || this.passesFreeVarTestQuick(formula, matchingPairs)) {
 					return matchingPairs;
 				}
 			}
@@ -226,6 +231,42 @@ App.EquivalenceRule = Backbone.Model.extend({
 
 			// Test to see if the variable occurs free in the subformula.
 			if (App.EquivalenceRule.occursFree(quantVar, subF)) {
+				return false;
+			}
+		}
+
+		return true;
+	},
+
+	// Given a formula and set of matching pairs, decides whether the formula,
+	// passes the free var test.
+	passesFreeVarTestQuick : function (formula, matchingPairs) {
+		var freeVarPairs = this.get("freeVarCheck"),
+			quantVar,
+			subFVar;
+
+		// For now return true if no matching quantifiers - because freeVarCheck being
+		// called on fwd and bwd. On bwd there are no matching quantifiers.
+		if (matchingPairs.quantifierPairs.length === 0) { return true; }
+
+		for (var i = 0, l = freeVarPairs.length; i < l; i++) {
+			// Set quantvar to the var that shouldnt occur in subF, given in terms
+			// of the rule.
+			quantVar = freeVarPairs[i][0];
+			subF = freeVarPairs[i][1];
+
+			// Set quantvar to the variable that it matched to in formula
+			quantVar = _.find(matchingPairs.quantifierPairs, function (p) {
+				return p[0] === quantVar;
+			})[1];
+
+			// Find the subF of formula that matches the subF letter in the pair
+			subF = _.find(matchingPairs.atomPairs, function (p) {
+				return p[0].get("symbol") === subF;
+			})[1];
+
+			// Test to see if the variable occurs free in the subformula.
+			if (App.EquivalenceRule.occursFreeQuick(quantVar, subF)) {
 				return false;
 			}
 		}
@@ -341,7 +382,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 			if (formula instanceof App.UnaryNodeNormal && formula.symbol === tree.attributes.symbol) {
 				if (!App.EquivalenceRule.formulaMatchesTreeQuick(formula.right, tree.attributes.right, matchingPairs)) {
 					return false;
-				} else if (formula instanceof App.Quantifier) { // need to also check that the quantifier variable of the rule has matched
+				} else if (formula instanceof App.QuantifierNormal) { // need to also check that the quantifier variable of the rule has matched
 						
 						for (i = 0; i < noQuantifierPairs; i++) {
 							if (matchingPairs.quantifierPairs[i][0] === tree.attributes.variable) {
@@ -432,7 +473,7 @@ App.EquivalenceRule = Backbone.Model.extend({
 			tree.right = App.EquivalenceRule.replaceSubsInTreeQuick(tree.right, matchedPairs);
 		} else if (tree instanceof App.UnaryNodeNormal) {
 			tree.right = App.EquivalenceRule.replaceSubsInTreeQuick(tree.right, matchedPairs);
-			if (tree instanceof App.Quantifier) {
+			if (tree instanceof App.QuantifierNormal) {
 				tree.variable = _.find(matchedPairs.quantifierPairs, function (pair) { return pair[0] === tree.variable; })[1];
 			}
 		} else { // We have found an atom
@@ -613,6 +654,44 @@ App.EquivalenceRule = Backbone.Model.extend({
 	occursFreeInstances : function (variable, formula) {
 		var instances = [];
 		App.EquivalenceRule.occursFreeInstancesRec(variable, formula, instances);
+		return instances;
+	},
+
+	// Takes in a variable (string) and formula
+	// Returns true if the variable occurs free in the 
+	occursFreeQuick : function (variable, formula) {
+		return App.EquivalenceRule.occursFreeInstancesQuick(variable, formula).length > 0;
+	},
+
+	// Walks down the tree, building an array of the predicates in which variable
+	// occurs free within formula.
+	occursFreeInstancesRecQuick : function (variable, formula, instances) {
+		if (formula instanceof App.QuantifierNormal && formula.variable === variable) {
+			return;
+		}
+
+		if (formula instanceof App.PredicateNormal) {
+			if (formula.containsTerm(variable)) {
+				instances.push(formula);
+			}
+			return;
+		}
+
+		if (formula.left) {
+			App.EquivalenceRule.occursFreeInstancesRecQuick(variable, formula.left, instances);
+		}
+
+		if (formula.right) {
+			App.EquivalenceRule.occursFreeInstancesRecQuick(variable, formula.right, instances)
+		}
+	},
+
+
+	// Portal function that allows us to return the instances array from the recursive function
+	// above.
+	occursFreeInstancesQuick : function (variable, formula) {
+		var instances = [];
+		App.EquivalenceRule.occursFreeInstancesRecQuick(variable, formula, instances);
 		return instances;
 	},
 
@@ -846,6 +925,7 @@ App.EquivalenceRuleView = Backbone.View.extend({
 
 	initialize: function () {
 		this.model.on("change:active", this.onActiveChange, this);
+		this.model.on("change:isCurApplicable", this.onIsCurApplicableChange, this);
 	},
 
 	render: function () {
@@ -885,6 +965,14 @@ App.EquivalenceRuleView = Backbone.View.extend({
 		}
 	},
 
+	onIsCurApplicableChange : function () {
+		if (this.model.get("isCurApplicable")) {
+			this.$el.addClass("isApplicable");
+		} else {
+			this.$el.removeClass("isApplicable");
+		}
+	},
+
 	onSolutionClick : function () {
 		App.vent.trigger("eqRuleSolutionClick", this.model.get("fromExercise"));
 	},
@@ -917,6 +1005,10 @@ App.EquivalenceRulesView = Backbone.View.extend({
 
 		// Bind to users about to log out - save all eq rules.
 		App.vent.on("userLoggingOut", this.onUserLoggingOut, this);
+
+		// Bind to formulas being selected/deselected
+		App.vent.on("formulaSelected", this.onFormulaSelected, this);
+		App.vent.on("formulaDeselected", this.onFormulaDeselected, this);
 
 		// An array to hold EquivalenceRuleViews
 		this.eqRuleViewModelPairs = [];
@@ -1006,6 +1098,22 @@ App.EquivalenceRulesView = Backbone.View.extend({
 		this.collection.remove(this.collection.rest(App.noBasicEqRules));
 	},
 
+	onFormulaSelected : function (formula) {
+		this.collection.each(function (eqRule){
+			if (eqRule.isApplicable(1, formula) || eqRule.isApplicable(-1, formula)) {
+				eqRule.set("isCurApplicable", true);
+			} else {
+				eqRule.set("isCurApplicable", false);
+			}
+		});
+	},
+
+	onFormulaDeselected : function () {
+		this.collection.each(function (eqRule){
+			eqRule.set("isCurApplicable", false);
+		});
+	},
+
 	removeEqRule : function (eqRule) {
 		// As only ever used to remove user eqs, reduce the search size.
 		var userEqRuleViewModelPairs = _.rest(this.eqRuleViewModelPairs,App.noBasicEqRules);
@@ -1061,6 +1169,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	{
 		rule: "A ∧ B ≡ B ∧ A",
 		bidirectional: false,
+		probabilities : [0.8, 0], // fwd then bwd probabilities
 		category: "Equivalences Involving ∧",
 
 		lhsTrees: [
@@ -1086,6 +1195,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 
 		rule: "A ∧ A ≡ A",
 		bidirectional: true,
+		probabilities : [0.9, 0],
 		category: "Equivalences Involving ∧",
 
 		lhsTrees: [
@@ -1106,6 +1216,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∧ ⊤ ≡ A",
 		bidirectional: true,
+		probabilities : [0.9, 0],
 		category: "Equivalences Involving ∧",
 
 		lhsTrees: [
@@ -1129,6 +1240,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∧ ⊥ ≡ ⊥",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences Involving ∧",
 
 		lhsTrees: [
@@ -1150,6 +1262,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬A ∧ A ≡ ⊥",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences Involving ∧",
 
 		lhsTrees: [
@@ -1179,6 +1292,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "(A ∧ B) ∧ C ≡ A ∧ (B ∧ C)",
 		bidirectional: true,
+		probabilities : [0.9, 0.9],
 		category: "Equivalences Involving ∧",
 
 		lhsTrees: [
@@ -1214,6 +1328,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, { // Equivalences involving or
 		rule: "A ∨ B ≡ B ∨ A",
 		bidirectional: false,
+		probabilities : [0.8, 0],
 		category: "Equivalences Involving ∨",
 
 		lhsTrees: [
@@ -1239,6 +1354,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∨ A ≡ A",
 		bidirectional: true,
+		probabilities : [0.9, 0],
 		category: "Equivalences Involving ∨",
 
 		lhsTrees: [
@@ -1259,6 +1375,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∨ ⊤ ≡ ⊤",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences Involving ∨",
 
 		lhsTrees: [
@@ -1280,6 +1397,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬A ∨ A ≡ ⊤",
 		bidirectional: true,
+		probabilities : [1.0, 0.3],
 		category: "Equivalences Involving ∨",
 
 		lhsTrees: [
@@ -1309,6 +1427,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∨ ⊥ ≡ A",
 		bidirectional: true,
+		probabilities : [0.9, 0],
 		category: "Equivalences Involving ∨",
 
 		lhsTrees: [
@@ -1332,6 +1451,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "(A ∨ B) ∨ C ≡ A ∨ (B ∨ C)",
 		bidirectional: true,
+		probabilities : [0.9, 0.9],
 		category: "Equivalences Involving ∨",
 
 		lhsTrees: [
@@ -1367,6 +1487,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬⊤ ≡ ⊥",
 		bidirectional: true,
+		probabilities : [0.5, 0.5],
 		category: "Equivalences Involving ¬",
 
 		lhsTrees: [
@@ -1380,6 +1501,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬⊥ ≡ ⊤",
 		bidirectional: true,
+		probabilities : [0.5, 0.5],
 		category: "Equivalences Involving ¬",
 
 		lhsTrees: [
@@ -1388,11 +1510,13 @@ App.equivalenceRules = new App.EquivalenceRules([
 		})],
 
 		rhsTrees: [
-		new App.Tautology()]
+		new App.Tautology()
+		]
 
 	}, {
 		rule: "¬¬A ≡ A",
 		bidirectional: true,
+		probabilities : [1, 0],
 		category: "Equivalences Involving ¬",
 
 		lhsTrees: [
@@ -1412,6 +1536,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A → A ≡ ⊤",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1430,6 +1555,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "⊤ → A ≡ A",
 		bidirectional: true,
+		probabilities : [0.9, 0],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1448,6 +1574,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A → ⊤ ≡ ⊤",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1464,6 +1591,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "⊥ → A ≡ ⊤",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1480,6 +1608,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A → ⊥ ≡ ¬A",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1500,6 +1629,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A → B ≡ ¬A ∨ B",
 		bidirectional: true,
+		probabilities : [1.0, 0.5],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1538,6 +1668,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A → B ≡ ¬(A ∧ ¬B)",
 		bidirectional: true,
+		probabilities : [0.5, 0.5],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1578,6 +1709,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬(A → B) ≡ A ∧ ¬B",
 		bidirectional: true,
+		probabilities : [1.0, 0.5],
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1618,6 +1750,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ↔ B ≡ (A → B) ∧ (B → A)",
 		bidirectional: true,
+		probabilities : [1.0, 0.3],
 		category: "Equivalences involving ↔",
 
 		lhsTrees: [
@@ -1677,6 +1810,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ↔ B ≡ (A ∧ B) ∨ (¬A ∧ ¬B)",
 		bidirectional: true,
+		probabilities : [0.9, 0.3],
 		category: "Equivalences involving ↔",
 
 		lhsTrees: [
@@ -1870,6 +2004,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ↔ B ≡ ¬A ↔ ¬B",
 		bidirectional: true,
+		probabilities : [0.8, 0.8],
 		category: "Equivalences involving ↔",
 
 		lhsTrees: [
@@ -1917,6 +2052,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬(A ↔ B) ≡ A ↔ ¬B",
 		bidirectional: true,
+		probabilities : [0.9, 0.9],
 		category: "Equivalences involving ↔",
 
 		lhsTrees: [
@@ -1964,6 +2100,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬(A ↔ B) ≡ ¬A ↔ B",
 		bidirectional: true,
+		probabilities : [0.8, 0.8],
 		category: "Equivalences involving ↔",
 
 		lhsTrees: [
@@ -2011,6 +2148,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬(A ↔ B) ≡ (A ∧ ¬B) ∨ (¬A ∧ B)",
 		bidirectional: true,
+		probabilities : [1, 0.4],
 		category: "Equivalences involving ↔",
 
 		lhsTrees: [
@@ -2115,6 +2253,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬(A ∧ B) ≡ ¬A ∨ ¬B",
 		bidirectional: true,
+		probabilities : [1, 1],
 		category: "De Morgan's laws",
 
 		lhsTrees: [
@@ -2146,6 +2285,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬(A ∨ B) ≡ ¬A ∧ ¬B",
 		bidirectional: true,
+		probabilities : [1, 1],
 		category: "De Morgan's laws",
 
 		lhsTrees: [
@@ -2177,6 +2317,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∧ (B ∨ C) ≡ (A ∧ B) ∨ (A ∧ C)",
 		bidirectional: true,
+		probabilities : [1.0, 1.0],
 		category: "Distributivity of ∧, ∨",
 
 		lhsTrees: [
@@ -2283,6 +2424,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∨ (B ∧ C) ≡ (A ∨ B) ∧ (A ∨ C)",
 		bidirectional: true,
+		probabilities : [1.0, 1.0],
 		category: "Distributivity of ∧, ∨",
 
 		lhsTrees: [
@@ -2389,6 +2531,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∧ (A ∨ B) ≡ A ∨ (A ∧ B)",
 		bidirectional: true,
+		probabilities : [1, 1],
 		category: "Distributivity of ∧, ∨",
 
 		lhsTrees: [
@@ -2496,6 +2639,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A ∧ (A ∨ B) ≡ A",
 		bidirectional: true,
+		probabilities : [1, 0],
 		category: "Distributivity of ∧, ∨",
 
 		lhsTrees: [
@@ -2556,6 +2700,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∀X∀Y(A) ≡ ∀Y∀X(A)",
 		bidirectional: false,
+		probabilities : [0.7, 0.7],
 		category: "Predicate Equivalences",
 
 		lhsTrees: [
@@ -2582,6 +2727,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∃X∃Y(A) ≡ ∃Y∃X(A)",
 		bidirectional: false,
+		probabilities : [0.7, 0.7],
 		category: "Predicate Equivalences",
 
 		lhsTrees: [
@@ -2608,6 +2754,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬∀X(A) ≡ ∃X¬(A)",
 		bidirectional: true,
+		probabilities : [1.0, 1.0],
 		category: "Predicate Equivalences",
 
 		lhsTrees: [
@@ -2632,6 +2779,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "¬∃X(A) ≡ ∀X¬(A)",
 		bidirectional: true,
+		probabilities : [1.0, 1.0],
 		category: "Predicate Equivalences",
 
 		lhsTrees: [
@@ -2654,8 +2802,59 @@ App.equivalenceRules = new App.EquivalenceRules([
 			})
 		})]
 	}, {
+		rule: "∀X(A) ≡ ¬∃X¬(A)",
+		bidirectional: true,
+		probabilities : [1.0, 1.0],
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.UniversalQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol: "A"
+			})
+		})],
+
+		rhsTrees: [
+		new App.NegationNode({
+			right : new App.ExistensialQuantifier({
+				variable : "X",
+				right: new App.NegationNode({
+					right: new App.Node({
+						symbol: "A"
+					})
+				})
+			})
+		})]
+	}, {
+		rule: "∃X(A) ≡ ¬∀X¬(A)",
+		bidirectional: true,
+		probabilities : [1.0, 1.0],
+		category: "Predicate Equivalences",
+
+		lhsTrees: [
+		new App.ExistensialQuantifier({
+			variable : "X",
+			right: new App.Node({
+				symbol: "A"
+			})
+		})],
+
+		rhsTrees: [
+		new App.NegationNode({
+			right: new App.UniversalQuantifier({
+				variable : "X",
+				right: new App.NegationNode({
+					right: new App.Node({
+						symbol: "A"
+					})
+				})
+			})
+		})]
+	}, {
 		rule: "∀X(A ∧ B) ≡ ∀X(A) ∧ ∀X(B)",
 		bidirectional: true,
+		probabilities : [0.5, 0.5],
 		category: "Predicate Equivalences",
 
 		lhsTrees: [
@@ -2714,6 +2913,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∃X(A ∧ B) ≡ ∃X(A) ∧ ∃X(B)",
 		bidirectional: true,
+		probabilities : [0.5, 0.5],
 		category: "Predicate Equivalences",
 
 		lhsTrees: [
@@ -2772,6 +2972,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∀X(A) ≡ A",
 		bidirectional: true,
+		probabilities : [0.7, 0],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2790,6 +2991,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∃X(A) ≡ A",
 		bidirectional: true,
+		probabilities : [0.7, 0],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2808,6 +3010,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∀X(A ∧ B) ≡ A ∧ ∀X(B)",
 		bidirectional: true,
+		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2840,6 +3043,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∀X(A ∨ B) ≡ A ∨ ∀X(B)",
 		bidirectional: true,
+		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2872,6 +3076,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∀X(A → B) ≡ A → ∃∀(B)",
 		bidirectional: true,
+		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2904,6 +3109,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∃X(A → B) ≡ A → ∃X(B)",
 		bidirectional: true,
+		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2936,6 +3142,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∀X(A → B) ≡ ∃X(A) → B",
 		bidirectional: true,
+		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "B"]], 
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -2968,6 +3175,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "∃X(A → B) ≡ ∀X(A) → B",
 		bidirectional: true,
+		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "B"]],
 		category: "Predicate Equivalences Involving Bound Variables",
 
@@ -3000,6 +3208,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule : "Rename Variable",
 		bidirectional : false,
+		probabilities : [0, 0],
 		category: "Predicate Equivalences Involving Bound Variables",
 
 		lhsTrees: [

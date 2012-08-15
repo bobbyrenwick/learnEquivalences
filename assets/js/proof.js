@@ -17,45 +17,82 @@ App.ChildNode = function (problem, parent, action) {
 	this.pathCost = parent.pathCost + 1;
 };
 
+App.OneSidedSolution = function (prob, side) {
+	var sideArr = App.searchNodeToArray(side),
+		fwdSideArr,
+		bwdSideArr;
 
-// Need to work out what this function actually does!
-App.Solution = function (node) {
+	// If side1's top parent (last element in array) is equal to the goal
+	// then side1 is from bottom up.
+	if (prob.goalTest(_.last(sideArr).stateString)) {
+		fwdSideArr = null;
+		bwdSideArr = sideArr;
+	} else {
+		fwdSideArr = sideArr;
+		bwdSideArr = null;
+	}
+
+	if (bwdSideArr) {
+		this.bwdSideArr = App.searchArrToBackboneAndEqRule(bwdSideArr);
+		this.fwdSideArr = null;	
+	} else {
+		this.fwdSideArr = App.searchArrToBackboneAndEqRule(fwdSideArr);
+		this.bwdSiedArr = null;
+	}
 
 };
 
+App.TwoSidedSolution = function (prob, side1, side2) {
+	var side1Arr = App.searchNodeToArray(side1),
+		side2Arr = App.searchNodeToArray(side2),
+		fwdSideArr,
+		bwdSideArr;
 
-// TODO: not completely done for normal
-App.matchingTreesNormal = function (tree1, tree2) {
-	if (tree2 instanceof App.BinaryNodeNormal) {
-		// the the top level structure of the tree is the same keep matching
-		if (tree1 instanceof App.BinaryNode && tree1.symbol === tree2.get("symbol")) {
-			// match recursively the left and right, if either returns false, then whole function should return false
-			return App.matchingTrees(tree1.get("left"), tree2.get("left")) && 
-				App.matchingTrees(tree1.get("right"), tree2.get("right"));
-		} else {
-			return false;
-		}
-	} else if (tree2 instanceof App.Quantifier) {
-		if (tree1 instanceof App.Quantifer && tree1.get("symbol") === tree2.get("symbol") &&
-			tree1.get("variable") === tree2.get("variable")) {
-			return App.matchingTrees(tree1.get("right"), tree2.get("right"));
-		} else {
-			return false;
-		}
-	} else if (tree2 instanceof App.UnaryNode) {
-		// match recursively right, if it returns false, then whole function should return false
-		if (tree1 instanceof App.UnaryNode && tree1.get("symbol") === tree2.get("symbol")) {
-			return App.matchingTrees(tree1.get("right"), tree2.get("right"));
-		} else {
-			return false;
-		}
-	} else if (tree2 instanceof App.Tautology) {
-		return tree1 instanceof App.Tautology;
-	} else if (tree2 instanceof App.Contradiction) {
-		return tree1 instanceof App.Contradiction;
-	} else { // Reached an atom
-		return tree1.get("symbol") === tree2.get("symbol")
+	// If side1's top parent (last element in array) is equal to the goal
+	// then side1 is from bottom up.
+	if (prob.goalTest(_.last(side1Arr).stateString)) {
+		fwdSideArr = side2Arr;
+		bwdSideArr = side1Arr;
+	} else {
+		fwdSideArr = side1Arr;
+		bwdSideArr = side2Arr;
 	}
+
+	this.fwdSideArr = App.searchArrToBackboneAndEqRule(fwdSideArr);
+	this.bwdSideArr = App.searchArrToBackboneAndEqRule(bwdSideArr);
+};
+
+App.searchNodeToArray = function (child) {
+	var arr = [child],
+		parent = child.parent;
+
+	while (parent !== undefined) {
+		arr.push(parent);
+		parent = parent.parent;
+	}
+
+	return arr;
+};
+
+App.searchArrToBackboneAndEqRule = function (arr) {
+	var arrB = _.map(arr, function (searchNode) {
+		searchNode.backboneState = App.parser.parse(searchNode.stateString);
+
+		if (searchNode.pathCost !== 0) {
+			searchNode.eqRule = searchNode.action.eqRule;
+			searchNode.direction = searchNode.action.direction;
+			delete searchNode.action;
+		}
+
+		// delete all thigns that are no longer needed;
+		delete searchNode.pathCost;
+		delete searchNode.state;
+		delete searchNode.stateString;
+
+		return searchNode;
+	}).reverse();
+
+	return arrB;
 };
 
 // For now ignore any rules that require an introduction.
@@ -77,7 +114,40 @@ App.findApplicableEqRules = function(formula) {
 	return [fwdApplicableRules, bwdApplicableRules];
 };
 
+// For now ignore any rules that require an introduction.
+App.findApplicableEqRulesPr = function(formula) {
+	var fwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
+			return eqRule.isApplicableQuick(1, formula) && 
+				eqRule.get("fwdIntroSymbols").quantifiers.length === 0 && 
+				eqRule.get("fwdIntroSymbols").symbols.length === 0 &&
+				eqRule.get("probabilities")[0] > Math.random();
+		});
 
+	var bwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
+			return eqRule.isApplicableQuick(-1, formula) && 
+				eqRule.get("bwdIntroSymbols").quantifiers.length === 0 && 
+				eqRule.get("bwdIntroSymbols").symbols.length === 0 &&
+				eqRule.get("probabilities")[1] > Math.random();
+		});
+
+	return [fwdApplicableRules, bwdApplicableRules];
+};
+
+App.findApplicableEqRulesWithAlwaysApplicable = function(formula) {
+	var fwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
+			return eqRule.isApplicableQuick(1, formula) && 
+				eqRule.get("fwdIntroSymbols").quantifiers.length === 0 && 
+				eqRule.get("fwdIntroSymbols").symbols.length === 0
+		});
+
+	var bwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
+			return eqRule.isApplicableQuick(-1, formula) && 
+				eqRule.get("bwdIntroSymbols").quantifiers.length === 0 && 
+				eqRule.get("bwdIntroSymbols").symbols.length === 0
+		});
+
+	return [fwdApplicableRules, bwdApplicableRules];
+};
 
 // FIFO queue
 // empty - array.length === 0
@@ -123,7 +193,7 @@ App.breadthFirstSearch = function (problem) {
 
 	while (frontier.length > 0) { // while there are still nodes in teh queue
 		node = frontier.shift();
-		noNodesExamined++;
+		
 
 		// Add node.state to the hash table
 		// explored[node.stateString] = 1;
@@ -144,6 +214,7 @@ App.breadthFirstSearch = function (problem) {
 					var eqRule = applicableRules[i][j];
 					var dir = (i === 0 ? 1 : -1); // if on first array of applicable rules, going fwds.
 					var child = new App.ChildNode(problem, node, { direction : dir, eqRule : eqRule, subF : curSubF, whole : node.state });
+
 
 					//var alreadyInFrontier = isInFrontier(child);
 					// If this state isn't in explored or in frontier
@@ -197,12 +268,20 @@ App.breadthFirstSearchBothDirections = function (problem) {
 
 	// TODO: From here need to work out how to make them go bwds and fwds at the same time.
 
-	while (fwdFrontier.length > 0) { // while there are still nodes in teh queue
+	while (fwdFrontier.length + bwdFrontier.length > 0) { // while there are still nodes in either queue
+		
+		// Direction should swap if there are still things left in the frontier
+		var thisDir = lastDir < 0 ? (fwdFrontier.length > 0 ? 1 : -1) : (bwdFrontier.length > 0 ? -1 : 1);
+		lastDir = lastDir < 0 ? 1 : -1;
+		var frontier = thisDir < 0 ? bwdFrontier : fwdFrontier;
+		var thisDirSortedExploredAndQueue = thisDir < 0 ? bwdSortedExploredAndQueue : fwdSortedExploredAndQueue;
+		var opDirSortedExploredAndQueue = thisDir < 0 ? fwdSortedExploredAndQueue : bwdSortedExploredAndQueue;;
+
 		node = frontier.shift();
 		noNodesExamined++;
 
 		// Add node's stateString to the sorted list
-		sortedExploredAndQueue.insertOne(node.stateString);
+		thisDirSortedExploredAndQueue.insertOne(node);
 
 		// Get all the subformulae of the current state
 		var subF = [];
@@ -218,14 +297,20 @@ App.breadthFirstSearchBothDirections = function (problem) {
 					var dir = (i === 0 ? 1 : -1); // if on first array of applicable rules, going fwds.
 					var child = new App.ChildNode(problem, node, { direction : dir, eqRule : eqRule, subF : curSubF, whole : node.state });
 
-					if (sortedExploredAndQueue.key({ stateString : child.stateString }) === null) {
+					if (thisDirSortedExploredAndQueue.key({ stateString : child.stateString }) === null) {
 						if (problem.goalTest(child.state)) {
+							debugger;
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return child; 
+						} else if (opDirSortedExploredAndQueue.key({ stateString : child.stateString }) !== null) {
+							console.log(opDirSortedExploredAndQueue[opDirSortedExploredAndQueue.key({ stateString : child.stateString })]);
 							console.timeEnd("Time taken:");
 							console.log("No nodes examined: ", noNodesExamined); 
 							return child; 
 						}
 
-						sortedExploredAndQueue.insertOne(child.stateString);
+						thisDirSortedExploredAndQueue.insertOne(child);
 						frontier.push(child);
 					} 
 				}
@@ -234,7 +319,240 @@ App.breadthFirstSearchBothDirections = function (problem) {
 	}
 
 	return false;
-}
+};
+
+App.breadthFirstSearchBothDirectionsHash = function (problem) {
+	console.time("Time taken:");
+
+	// Create problems for both backwards and forwards.
+	var fwdProb = problem;
+	var bwdProb = new App.Problem(fwdProb.goal, fwdProb.initialState);
+	
+	var fwdNode = new App.SearchNode(fwdProb.initialState, 0);
+	var bwdNode = new App.SearchNode(bwdProb.initialState, 0);
+
+	// Only check once as it is the same for bwds and fwds.
+	if (problem.goalTest(fwdNode.state)) { return new Solution(fwdNode); }
+	
+	var fwdFrontier = [fwdNode]; // FIFO queue with node as the only element
+	var bwdFrontier = [bwdNode];
+
+	var fwdSortedExploredAndQueue = {};
+	fwdSortedExploredAndQueue[fwdNode.stateString] = fwdNode;
+
+	var bwdSortedExploredAndQueue = {};
+	bwdSortedExploredAndQueue[bwdNode.stateString] = bwdNode;	
+	
+	var noNodesExamined = 0;
+	var lastDir = -1;
+
+	while (fwdFrontier.length + bwdFrontier.length > 0) { // while there are still nodes in either queue
+		
+		// Direction should swap if there are still things left in the frontier
+		var thisDir = lastDir < 0 ? (fwdFrontier.length > 0 ? 1 : -1) : (bwdFrontier.length > 0 ? -1 : 1);
+		lastDir = lastDir < 0 ? 1 : -1;
+		var frontier = thisDir < 0 ? bwdFrontier : fwdFrontier;
+		var thisDirSortedExploredAndQueue = thisDir < 0 ? bwdSortedExploredAndQueue : fwdSortedExploredAndQueue;
+		var opDirSortedExploredAndQueue = thisDir < 0 ? fwdSortedExploredAndQueue : bwdSortedExploredAndQueue;;
+
+		node = frontier.shift();
+		noNodesExamined++;
+
+		// Add node's stateString to the sorted list
+		thisDirSortedExploredAndQueue[node.stateString] = node;
+
+		// Get all the subformulae of the current state
+		var subF = [];
+		node.state.getSubFormulae(subF);
+
+		for (m = 0, n = subF.length; m < n; m++) {
+			var curSubF = subF[m]; // cache the current sub formula
+			var applicableRules = App.findApplicableEqRules(curSubF);
+
+			for (i = 0; i < applicableRules.length; i++) { // for both rules that are applicable fwds and bwds.
+				for (j = 0, l = applicableRules[i].length; j < l; j++) { 
+					var eqRule = applicableRules[i][j];
+					var dir = (i === 0 ? 1 : -1); // if on first array of applicable rules, going fwds.
+					var child = new App.ChildNode(problem, node, { direction : dir, eqRule : eqRule, subF : curSubF, whole : node.state });
+
+					if (thisDirSortedExploredAndQueue[child.stateString] === undefined) {
+						if (problem.goalTest(child.state)) {
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return child; 
+						} else if (opDirSortedExploredAndQueue[child.stateString] !== undefined) {
+							console.log(opDirSortedExploredAndQueue[child.stateString]);
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return child; 
+						}
+
+						thisDirSortedExploredAndQueue[child.stateString] = child;
+						frontier.push(child);
+					} 
+				}
+			}
+		}
+	}
+
+	return false;
+};
+
+App.breadthFirstSearchBothDirectionsHashPr = function (problem) {
+	console.time("Time taken:");
+
+	// Create problems for both backwards and forwards.
+	var fwdProb = problem;
+	var bwdProb = new App.Problem(fwdProb.goal, fwdProb.initialState);
+	
+	var fwdNode = new App.SearchNode(fwdProb.initialState, 0);
+	var bwdNode = new App.SearchNode(bwdProb.initialState, 0);
+
+	// Only check once as it is the same for bwds and fwds.
+	if (problem.goalTest(fwdNode.state)) { return new Solution(fwdNode); }
+	
+	var fwdFrontier = [fwdNode]; // FIFO queue with node as the only element
+	var bwdFrontier = [bwdNode];
+
+	var fwdSortedExploredAndQueue = {};
+	fwdSortedExploredAndQueue[fwdNode.stateString] = fwdNode;
+
+	var bwdSortedExploredAndQueue = {};
+	bwdSortedExploredAndQueue[bwdNode.stateString] = bwdNode;	
+	
+	var noNodesExamined = 0;
+	var lastDir = -1;
+
+	while (fwdFrontier.length + bwdFrontier.length > 0) { // while there are still nodes in either queue
+		
+		// Direction should swap if there are still things left in the frontier
+		var thisDir = lastDir < 0 ? (fwdFrontier.length > 0 ? 1 : -1) : (bwdFrontier.length > 0 ? -1 : 1);
+		lastDir = lastDir < 0 ? 1 : -1;
+		var frontier = thisDir < 0 ? bwdFrontier : fwdFrontier;
+		var thisDirSortedExploredAndQueue = thisDir < 0 ? bwdSortedExploredAndQueue : fwdSortedExploredAndQueue;
+		var opDirSortedExploredAndQueue = thisDir < 0 ? fwdSortedExploredAndQueue : bwdSortedExploredAndQueue;;
+
+		node = frontier.shift();
+
+		// Add node's stateString to the sorted list
+		thisDirSortedExploredAndQueue[node.stateString] = node;
+
+		// Get all the subformulae of the current state
+		var subF = [];
+		node.state.getSubFormulae(subF);
+
+		for (m = 0, n = subF.length; m < n; m++) {
+			var curSubF = subF[m]; // cache the current sub formula
+			var applicableRules = App.findApplicableEqRulesPr(curSubF);
+
+			for (i = 0; i < applicableRules.length; i++) { // for both rules that are applicable fwds and bwds.
+				for (j = 0, l = applicableRules[i].length; j < l; j++) { 
+					var eqRule = applicableRules[i][j];
+					var dir = (i === 0 ? 1 : -1); // if on first array of applicable rules, going fwds.
+					var child = new App.ChildNode(problem, node, { direction : dir, eqRule : eqRule, subF : curSubF, whole : node.state });
+					noNodesExamined++;
+
+					if (thisDirSortedExploredAndQueue[child.stateString] === undefined) {
+						if (problem.goalTest(child.state)) {
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return child; 
+						} else if (opDirSortedExploredAndQueue[child.stateString] !== undefined) {
+							console.log(opDirSortedExploredAndQueue[child.stateString]);
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return child; 
+						}
+
+						thisDirSortedExploredAndQueue[child.stateString] = child;
+						frontier.push(child);
+					} 
+				}
+			}
+		}
+	}
+
+	return false;
+};
+
+App.breadthFirstSearchBothDirectionsHashPrTimed = function (problem) {
+	console.time("Time taken:");
+	var finish = Date.now() + 10000; // Give max of 10 seconds for execution
+
+	// Create problems for both backwards and forwards.
+	var fwdProb = problem;
+	var bwdProb = new App.Problem(fwdProb.goal, fwdProb.initialState);
+	
+	var fwdNode = new App.SearchNode(fwdProb.initialState, 0);
+	var bwdNode = new App.SearchNode(bwdProb.initialState, 0);
+
+	// Only check once as it is the same for bwds and fwds.
+	if (problem.goalTest(fwdNode.state)) { return new App.OneSidedSolution(problem, fwdNode); }
+	
+	var fwdFrontier = [fwdNode]; // FIFO queue with node as the only element
+	var bwdFrontier = [bwdNode];
+
+	var fwdSortedExploredAndQueue = {};
+	fwdSortedExploredAndQueue[fwdNode.stateString] = fwdNode;
+
+	var bwdSortedExploredAndQueue = {};
+	bwdSortedExploredAndQueue[bwdNode.stateString] = bwdNode;	
+	
+	var noNodesExamined = 0;
+	var lastDir = -1;
+
+	while (fwdFrontier.length + bwdFrontier.length > 0) { // while there are still nodes in either queue
+		
+		// Direction should swap if there are still things left in the frontier
+		var thisDir = lastDir < 0 ? (fwdFrontier.length > 0 ? 1 : -1) : (bwdFrontier.length > 0 ? -1 : 1);
+		lastDir = lastDir < 0 ? 1 : -1;
+		var frontier = thisDir < 0 ? bwdFrontier : fwdFrontier;
+		var thisDirSortedExploredAndQueue = thisDir < 0 ? bwdSortedExploredAndQueue : fwdSortedExploredAndQueue;
+		var opDirSortedExploredAndQueue = thisDir < 0 ? fwdSortedExploredAndQueue : bwdSortedExploredAndQueue;;
+
+		node = frontier.shift();
+
+		// Add node's stateString to the sorted list
+		thisDirSortedExploredAndQueue[node.stateString] = node;
+
+		// Get all the subformulae of the current state
+		var subF = [];
+		node.state.getSubFormulae(subF);
+
+		for (m = 0, n = subF.length; m < n; m++) {
+			var curSubF = subF[m]; // cache the current sub formula
+			var applicableRules = App.findApplicableEqRulesPr(curSubF);
+
+			for (i = 0; i < applicableRules.length; i++) { // for both rules that are applicable fwds and bwds.
+				for (j = 0, l = applicableRules[i].length; j < l; j++) { 
+					var eqRule = applicableRules[i][j];
+					var dir = (i === 0 ? 1 : -1); // if on first array of applicable rules, going fwds.
+					var child = new App.ChildNode(problem, node, { direction : dir, eqRule : eqRule, subF : curSubF, whole : node.state });
+					noNodesExamined++;
+
+					if (thisDirSortedExploredAndQueue[child.stateString] === undefined) {
+						if (problem.goalTest(child.state)) {
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return new App.OneSidedSolution(problem, child); 
+						} else if (opDirSortedExploredAndQueue[child.stateString] !== undefined) {
+							console.timeEnd("Time taken:");
+							console.log("No nodes examined: ", noNodesExamined); 
+							return new App.TwoSidedSolution(problem, child, opDirSortedExploredAndQueue[child.stateString]); 
+						} else if (Date.now() - finish >= 0) {
+							return "Unfortunately we couldn't find a hint quickly enough.";
+						}
+
+						thisDirSortedExploredAndQueue[child.stateString] = child;
+						frontier.push(child);
+					} 
+				}
+			}
+		}
+	}
+
+	return false;
+};
 
 App.Problem = function (initialState, goal) {
 	this.initialState = initialState;
@@ -243,7 +561,7 @@ App.Problem = function (initialState, goal) {
 	this.goalTest = function (nodeState) {
 		return nodeState.toString() === this.goalString;
 	};
-}
+};
 
 App.testProb1 = new App.NegationNodeNormal(
 	new App.NegationNodeNormal(
@@ -324,4 +642,35 @@ App.testProb9 = new App.AndNodeNormal(
 	)
 );
 
-// TODO : get rid of all the eq rules that cna be applied to anything - can catch them in the other direction.
+App.testProb10 = new App.OrNodeNormal(
+	new App.NegationNodeNormal(
+		new App.DimplyNodeNormal(
+			new App.NodeNormal("P"),
+			new App.NodeNormal("Q")
+		),
+		new App.NodeNormal("Q")
+	),
+	new App.NodeNormal("Q")
+);
+
+App.testProb11 = new App.OrNodeNormal(
+	new App.NodeNormal("P"),
+	new App.ImplyNodeNormal(
+		new App.ImplyNodeNormal(
+			new App.NodeNormal("Q"),
+			new App.NodeNormal("P")
+		),
+		new App.NodeNormal("P")
+	)
+);
+
+App.testProb12 = new App.OrNodeNormal(
+	new App.NodeNormal("P"),
+	new App.ImplyNodeNormal(
+		new App.ImplyNodeNormal(
+			new App.NodeNormal("Q"),
+			new App.NodeNormal("P")
+		),
+		new App.NodeNormal("P")
+	)
+);
