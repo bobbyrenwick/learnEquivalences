@@ -224,6 +224,7 @@ label.checkbox {
 	        box-shadow: 23px 0px 4px -20px rgba(0,0,0,.05) inset;
 	padding-left: 10px;
 	height: 100%;
+	overflow-y: auto;
 }
 
 .inner-padding-left {
@@ -325,4 +326,13 @@ svg rect.highlighted {
 	li.answerStep small {
 		display : block;
 	}
+}
+
+#newExerciseModal .btn-info {
+	margin-top: 5px;
+	width: 100%;
+}
+
+#newExerciseModal .input-xlarge {
+	width: 98%;
 }

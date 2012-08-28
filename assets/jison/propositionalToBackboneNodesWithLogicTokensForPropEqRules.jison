@@ -1,5 +1,5 @@
 /* description: Parses both propositional and first order logic */
-
+/* get rid of letters a-z for both constant and pred */
 /* lexical grammar */
 %lex
 %%

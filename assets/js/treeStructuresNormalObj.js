@@ -34,6 +34,27 @@ App.backboneToNormal = function (formula) {
 	}
 };
 
+
+App.getTerms = function (formula) {
+	var termsArr = [];
+	App.getTermsRec(formula, termsArr);
+	return _.uniq(termsArr);
+};
+
+App.getTermsRec = function (formula, termsArr) {
+	if (formula instanceof App.PredicateNormal) {
+		_.each(formula.terms, function (t) { termsArr.push(t.toString()); });
+	}
+
+	if (formula.left) {
+		App.getTermsRec(formula.left, termsArr);
+	}
+
+	if (formula.right) {
+		App.getTermsRec(formula.right, termsArr);
+	}
+};
+
 App.NodeNormal = function (symbol) {
 	// defaults
 	this.precedence = 10000;

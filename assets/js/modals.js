@@ -899,7 +899,8 @@ App.NewExerciseView = App.ModalView.extend({
 		"blur input": "onTextBlur",
 		"click .btn-success": "onStart",
 		"click .btn-close": "close",
-		"click .close": "close"
+		"click .close": "close",
+		"click .btn-info" : "generateExercise"
 	},
 
 	initialize: function () {
@@ -914,6 +915,7 @@ App.NewExerciseView = App.ModalView.extend({
 		this.inputViews = [];
 
 		this.equivalenceChecker = new App.EquivalenceChecker();
+		this.exGen = new App.ExerciseGenerator();
 	},
 
 	render: function () {
@@ -923,7 +925,7 @@ App.NewExerciseView = App.ModalView.extend({
 		this.$el.html(renderedContent);
 
 		// Add the connective toolbar
-		this.$('fieldset').prepend(this.connectiveToolbar.render().$el);
+		this.$('fieldset').append(this.connectiveToolbar.render().$el);
 
 		// Create starting and finishing inputs
 		_.each(this.labels, function (label, i) {
@@ -989,6 +991,16 @@ App.NewExerciseView = App.ModalView.extend({
 
 	isPredicateExercise : function () {
 		return _.reduce(this.inputViews, function(memo, iView) { if(!memo) { return iView.isPredicate() } else { return memo } }, false);
+	},
+
+	generateExercise : function () {
+		var $activeBtns = this.$(".active"),
+			difficulty = $activeBtns.eq(0).val(),
+			exType = $activeBtns.eq(1).val(),
+			newExercise = this.exGen["get" + difficulty + exType]();
+
+		this.$("#new-wff-0").val(newExercise[0]);
+		this.$("#new-wff-1").val(newExercise[1]);
 	}
 });
 

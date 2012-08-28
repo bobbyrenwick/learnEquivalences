@@ -117,37 +117,44 @@ App.findApplicableEqRules = function(formula) {
 // For now ignore any rules that require an introduction.
 App.findApplicableEqRulesPr = function(formula) {
 	var fwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
-			return eqRule.isApplicableQuick(1, formula) && 
-				eqRule.get("fwdIntroSymbols").quantifiers.length === 0 && 
+			return eqRule.get("fwdIntroSymbols").quantifiers.length === 0 && 
 				eqRule.get("fwdIntroSymbols").symbols.length === 0 &&
-				eqRule.get("probabilities")[0] > Math.random();
+				eqRule.get("probabilities")[0] > Math.random() &&
+				eqRule.isApplicableQuick(1, formula);
 		});
 
 	var bwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
-			return eqRule.isApplicableQuick(-1, formula) && 
+			return eqRule.get("bwdIntroSymbols").quantifiers.length === 0 && 
+				eqRule.get("bwdIntroSymbols").symbols.length === 0 &&
+				eqRule.get("probabilities")[1] > Math.random() &&
+				eqRule.isApplicableQuick(-1, formula);
+		});
+
+	return [fwdApplicableRules, bwdApplicableRules];
+};
+
+// For now ignore any rules that require an introduction.
+App.findApplicableEqRulesForEqGen = function(formula) {
+	var fwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
+			return eqRule.get("forEqGen") &&
+				eqRule.get("fwdIntroSymbols").quantifiers.length === 0 && 
+				eqRule.get("fwdIntroSymbols").symbols.length === 0 && 
+				!eqRule.alwaysApplicable(1) &&
+				eqRule.isApplicableQuick(1, formula);
+				
+		});
+
+	var bwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
+			return eqRule.get("forEqGen") &&
 				eqRule.get("bwdIntroSymbols").quantifiers.length === 0 && 
 				eqRule.get("bwdIntroSymbols").symbols.length === 0 &&
-				eqRule.get("probabilities")[1] > Math.random();
+				!eqRule.alwaysApplicable(-1) &&
+				eqRule.isApplicableQuick(-1, formula);
 		});
 
 	return [fwdApplicableRules, bwdApplicableRules];
 };
 
-App.findApplicableEqRulesWithAlwaysApplicable = function(formula) {
-	var fwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
-			return eqRule.isApplicableQuick(1, formula) && 
-				eqRule.get("fwdIntroSymbols").quantifiers.length === 0 && 
-				eqRule.get("fwdIntroSymbols").symbols.length === 0
-		});
-
-	var bwdApplicableRules = App.equivalenceRules.filter(function(eqRule) { 
-			return eqRule.isApplicableQuick(-1, formula) && 
-				eqRule.get("bwdIntroSymbols").quantifiers.length === 0 && 
-				eqRule.get("bwdIntroSymbols").symbols.length === 0
-		});
-
-	return [fwdApplicableRules, bwdApplicableRules];
-};
 
 // FIFO queue
 // empty - array.length === 0

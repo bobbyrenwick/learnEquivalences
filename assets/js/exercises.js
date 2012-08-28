@@ -1585,49 +1585,176 @@ App.ExerciseGenerator = Backbone.Model.extend({
 
 	initialize : function () {
 		this.set({
-			"atoms" : ["P", "Q", "R", "S", "T", "U", "V", "W"],
+			"atoms" : ["P", "Q", "R", "U", "V", "W", "X", "Y"],
 			"predicates" : ["a", "b" , "c", "d", "e", "f", "g", "h"],
-			"constructors" : [App.NegationNodeNormal, App.AndNodeNormal, App.OrNodeNormal, App.ImplyNodeNormal, App.DimplyNodeNormal]
+			"easyConstructors" : [App.NegationNodeNormal, App.AndNodeNormal, App.OrNodeNormal],
+			"medConstructors" : [App.ImplyNodeNormal],
+			"hardConstructors" : [App.DimplyNodeNormal],
+			"predConstructors" : [App.UniversalQuantifierNormal, App.ExistensialQuantifierNormal]
 		});
+	},
+
+	getEasyPropositional : function () {
+		return this.generatePropExercise(this.get("easyConstructors"), 3, 3, 3);
+	},
+
+	getMediumPropositional : function () {
+		return this.generatePropExercise(this.get("easyConstructors").concat(this.get("medConstructors")), 4, 3, 5);
+	},
+
+	getHardPropositional : function () {
+		return this.generatePropExercise(this.get("easyConstructors").concat(this.get("medConstructors"), this.get("hardConstructors")), 4, 4, 9);
+	},
+
+	getEasyPredicate : function () {
+		return this.generatePredExercise(this.get("easyConstructors"), 3, 3, 2, 4);
+	},
+
+	getMediumPredicate : function () {
+		return this.generatePredExercise(this.get("easyConstructors"), 3, 3, 3, 6);
+	},
+
+	getHardPredicate : function () {
+		return this.generatePredExercise(this.get("easyConstructors"), 3, 3, 4, 9);
 	},
 
 	// noDiffAtoms - min 0, max 8
-	generatePropExercise : function (noConnectives, noDiffAtoms) {
+	generatePropExercise : function (connectiveList, noConnectives, noDiffAtoms, noStepsAway) {
+		var startingWff = this.generatePropFormula(connectiveList, noConnectives, noDiffAtoms),
+			oneSecondFromStart = Date.now() + 1000,
+			finishingWff;
+
+		while (finishingWff === undefined) {
+			// If still not found a finishingWff after a second, generate another startingWff
+			if (Date.now() > oneSecondFromStart) {
+				startingWff = this.generatePropFormula(connectiveList, noConnectives, noDiffAtoms);
+				onSecondFromStart = Date.now() + 1000;
+			}
+
+			finishingWff = this.generateEquivalentFormula(startingWff, noStepsAway);
+		}
+
+		return [startingWff.toString(), finishingWff.toString()];
+	},
+
+	generatePredExercise : function (connectiveList, noConnectives, noDiffPredicates, noDiffQuantifiers, noStepsAway) {
+		var startingWff = this.generatePredFormula(connectiveList, noConnectives, noDiffPredicates, noDiffQuantifiers),
+			oneSecondFromStart = Date.now() + 1000,
+			finishingWff;
+
+		while (finishingWff === undefined) {
+			// If still not found a finishingWff after a second, generate another startingWff
+			if (Date.now() > oneSecondFromStart) {
+				startingWff = this.generatePredFormula(connectiveList, noConnectives, noDiffPredicates, noDiffQuantifiers);
+				onSecondFromStart = Date.now() + 1000;
+			}
+
+			finishingWff = this.generateEquivalentFormula(startingWff, noStepsAway);
+		}
+
+		return [startingWff.toString(), finishingWff.toString()];
+	},
+
+	generatePropFormula : function (connectiveList, noConnectives, noDiffAtoms) {
 		var possAtoms = _.first(this.get("atoms"), noDiffAtoms),
-			level = 1,
-			allFormulae = {};
+			allFormulae = {},
+			level = 2;
 
 		// Generate all the atoms that can be done
-		allFormulae[0] = _.map(possAtoms, function (atom) {
-			return (typeof atom === "string" ? new App.NodeNormal(atom) : new atom);
+		allFormulae[0] = _.map(possAtoms, function (symbol) {
+			return new App.NodeNormal(symbol);
 		});
 
+		allFormulae[1] = _.map(allFormulae[0], function (atom) {
+			return new App.NegationNodeNormal(atom);
+		});
 
 		while (level <= noConnectives) {
-			allFormulae[level] = this.generateAllFormulae(level, allFormulae, possAtoms);
+			allFormulae[level] = this.generateAllFormulae(connectiveList, level, allFormulae);
 			level++;
 		}
 
-		return allFormulae
+		var lastLevel = allFormulae[level - 1];
+
+		return lastLevel[App.getRandomInt(0, lastLevel.length - 1)];
 	},
 
-	generateAllFormulae : function (level, allFormulae, possAtoms) {
-		var prevLvl = allFormulae[level -1],
-			noPrevFormulae = prevLvl.length,
+	// The number of different quantifiers limits both the number of variables that can be used (as we
+	// are making sentences) and also the maximum arity of our predicates.
+	generatePredFormula : function (connectiveList, noConnectives, noDiffPredicates, noDiffQuantifiers) {
+		var possPredicates = _.first(this.get("predicates"), noDiffPredicates);
+		var allTerms = _.first(this.get("atoms"), noDiffQuantifiers);
+		var powerSetTerms = _.rest(App.powerset(allTerms)); // rest removes the empty set
+		var shuffledTerms = _.map(powerSetTerms, function (termArr) { return _.shuffle(termArr); });
+		var shuffledNodes = _.map(shuffledTerms, function (termArr) {
+				return _.map(termArr, function (term) {
+					return new App.NodeNormal(term);
+				})
+			});
+		var allFormulae = {};
+		var level = 2;
+
+		// Level 0 here is equivalent to creating all (not quite all as we are only doing 1 shuffle of each arr in power
+		// set. TODO: make it all) the possible predicates with all possible combinations
+		// up to the max arity of the variables as it's terms.
+		allFormulae[0] = _.map(possPredicates, function (predSymbol) {
+			// Pick a random shuffledNodes in order to keep the arity
+			var terms = shuffledNodes[App.getRandomInt(0, shuffledNodes.length - 1)];
+			return new App.PredicateNormal(predSymbol, terms);
+		});
+
+		allFormulae[1] = _.map(allFormulae[0], function (atom) {
+			return new App.NegationNodeNormal(atom);
+		});
+
+		while (level <= noConnectives) {
+			allFormulae[level] = this.generateAllFormulae(connectiveList, level, allFormulae);
+			level++;
+		}
+
+		var lastLevel = allFormulae[level - 1];
+		var randomFormula = lastLevel[App.getRandomInt(0, lastLevel.length - 1)];
+
+		return this.quantifyFormula(randomFormula);
+	},
+
+	// Takes a formula, finds all the variables that occur free within the formula
+	// places a random quantifier with that variable at the very front of the formula.
+	quantifyFormula : function (formula) {
+		var terms = App.getTerms(formula),
+			freeTerms = _.filter(terms, function (t) {
+				return App.EquivalenceRule.occursFreeQuick(t, formula);
+			});
+
+		// For each of the free terms, randomly create either a universal or existensial quantifier.
+		_.each(freeTerms, function (t) {
+			formula = (Math.random() > 0.5 ?
+						new App.UniversalQuantifierNormal(t, formula) :
+						new App.ExistensialQuantifierNormal(t, formula));
+		});
+
+		return formula;
+	},
+
+	generateAllFormulae : function (connectiveList, level, allFormulae) {
+		var prevLvl = allFormulae[level -1],	
 			thisLvl = [],
-			noConstructors = this.get("constructors").length,
+			noConstructors = connectiveList.length,
 			self = this;
 
 		_.each(prevLvl, function (prevFormula) {
 			// Pick a random connective to be head of the tree.
-			var newRoot = self.get("constructors")[App.getRandomInt(0, noConstructors -1)],
+			var newRoot = connectiveList[App.getRandomInt(0, noConstructors -1)],
 				newFormula;
 
 			if (newRoot.prototype.takes === 2) {
-				newFormula = new newRoot(prevFormula,
-										(level === 1 ? prevLvl[App.getRandomInt(0, noPrevFormulae - 1)] :
-										 allFormulae[0][App.getRandomInt(0, allFormulae[0].length - 1)])
-				);
+				// randomise whether the prevFormula goes on the left of right of the formula.
+				if (Math.random() > 0.5) {
+					newFormula = new newRoot(prevFormula, allFormulae[0][App.getRandomInt(0, allFormulae[0].length - 1)]);	
+				} else {
+					newFormula = new newRoot(allFormulae[0][App.getRandomInt(0, allFormulae[0].length - 1)], prevFormula);
+				}
+				
 			} else if (newRoot.prototype.takes === 1) {
 				newFormula = new newRoot(prevFormula);
 			}
@@ -1639,46 +1766,70 @@ App.ExerciseGenerator = Backbone.Model.extend({
 		return thisLvl;
 	},
 
+	// Takes a formula and generates another formula that is the result of steps (int)
+	// applications of equivalence rules
 	generateEquivalentFormula : function (formula, steps) {
 		var stepsTaken = 0,
 			subF,
 			curSubF,
 			applicableRules,
-			resultingFormulae,
+			resultingFormula,
+			resultingFormulae = { 0 : [formula] },
 			eqRule,
 			dir,
-			matchingPairs;
+			matchingPairs,
+			allSteps = {};
 
-		for (var stepsTaken = 0; stepsTaken < steps; stepsTaken++) {
-			// Reset resulting formulae
-			resultingFormulae = [];
+		// Add the original formula to allSteps
+		allSteps[formula.toString()] = 1;
 
-			// Get all subformulae of current formula
-			subF = [];
-			formula.getSubFormulae(subF);
+		// For the number of steps required
+		for (var stepsTaken = 1; stepsTaken <= steps; stepsTaken++) {
+			// Create an array to hold the new formulae
+			resultingFormulae[stepsTaken] = [];
 
-			// Pick a random subformula
-			curSubF = subF[App.getRandomInt(0, subF.length - 1)];
+			// Go through 20 random formulae (or all of them if < inn) 20 level below that exist and generate all possible
+			// formulae from applying 1 equivalence rule to every sub formula.
+			for (var noForm = 0, totalForms = resultingFormulae[stepsTaken - 1].length; noForm < 20 && noForm < totalForms; noForm++) {
+				var randIdx = App.getRandomInt(0, resultingFormulae[stepsTaken -1].length - 1);
+				var form = resultingFormulae[stepsTaken -1][randIdx];
 
-			// Find all the applicable rules for the subF
-			applicableRules = App.findApplicableEqRules(curSubF);
+				// Get all subformulae of current formula
+				subF = [];
+				form.getSubFormulae(subF);
 
-			// Add all the formulae that result from the application of the rules to resultingFormulae
-			for (i = 0; i < applicableRules.length; i++) { // For both rules that are applicable fwds and bwds.
-				for (j = 0, l = applicableRules[i].length; j < l; j++) { 
-					eqRule = applicableRules[i][j];
-					dir = (i === 0 ? 1 : -1); // If on first array of applicable rules then we're going fwds.
-					matchingPairs = eqRule.isApplicableQuick(dir, curSubF);
+				// For every subformula
+				for (var iSub = 0, totalSubs = subF.length; iSub < totalSubs; iSub++) {
+					// Cache the sub formula
+					curSubF = subF[iSub];
 
-					// TODO: use an object to check that this hasn't already been looked at
-					resultingFormulae.push(eqRule.applyRuleQuick(dir, matchingPairs, curSubF, formula));
+					// Find all the applicable rules for the subF
+					applicableRules = App.findApplicableEqRulesForEqGen(curSubF);
+
+					// Add all the formulae that result from the application of the rules to resultingFormulae
+					for (i = 0; i < applicableRules.length; i++) { // For both rules that are applicable fwds and bwds.
+						for (j = 0, l = applicableRules[i].length; j < l; j++) { 
+							eqRule = applicableRules[i][j];
+							dir = (i === 0 ? 1 : -1); // If on first array of applicable rules then we're going fwds.
+							
+							matchingPairs = eqRule.isApplicableQuick(dir, curSubF);
+							resultingFormula = eqRule.applyRuleQuick(dir, matchingPairs, curSubF, form);
+
+							
+							if (!allSteps[resultingFormula.toString()]) { // If this step hasn't already been used, add it to the new resultingFormulae
+								allSteps[resultingFormula.toString()] = 1; 
+								resultingFormulae[stepsTaken].push(resultingFormula);
+							}
+						}
+					}
 				}
 			}
-
-			if (resultingFormulae.length === 0) { debugger; return "error"; }
-			// Set formula to equal a random one of resulting formulae.
-			formula = resultingFormulae[App.getRandomInt(0, resultingFormulae.length - 1)];
-
 		}
+
+		// Get the last level of steps
+		var lastStepsLevel = resultingFormulae[stepsTaken - 1];
+
+		// Return a random one of the last level
+		return lastStepsLevel[App.getRandomInt(0, lastStepsLevel.length - 1)];
 	}
 });

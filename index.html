@@ -66,6 +66,22 @@
 	  <div class="modal-body">
 		<form class="form-horizontal">
 		  <fieldset>
+		  	<div class="control-group">
+		  		<label class="control-label" for="">Exercise Generator</label>
+		  		<div class="controls connective-toolbar btn-toolbar">
+					<div class="btn-group" data-toggle="buttons-radio">
+						<button type="button" class="btn active" value="Easy">Easy</button>
+						<button type="button" class="btn" value="Medium">Medium</button>
+						<button type="button" class="btn" value="Hard">Hard</button>
+				</div>
+				<div class="btn-group" data-toggle="buttons-radio">
+					<button type="button" class="btn active" value="Propositional">Propositional</button>
+					<button type="button" class="btn" value="Predicate">Predicate</button>
+				</div>
+				<p class="help-block">Choose a difficulty and exercise type and click the button below to automatically generate an exercise.</p>
+				<button type="button" class="btn btn-info">Generate Exercise</button>
+			  </div>
+			</div>
 		  </fieldset>
 		</form>
 	  </div>
@@ -191,7 +207,7 @@
 	<script id="subFIntroFormBlockTemplate" type="text/template">
 	  <label class="control-label" for="new-wff-<%= i %>"><%= label %></label>
 	  <div class="controls">
-		<div class="input-append">
+		<div <% if (showIntroduce) { %> class="input-append" <% } %>>
 		  <input type="text" class="input-xlarge" id="new-wff-<%= i %>" <% if (value) print("value=\"" + value + "\"");  %>><% if (showIntroduce) { %><button class="btn introduce-wff" type="button">Introduce</button><% } %>
 		</div>
 		<p class="help-block"></p>

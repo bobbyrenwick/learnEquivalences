@@ -54,6 +54,21 @@ App.hasLowerCase = function (str) {
     return str.toUpperCase() != str;
 }
 
+
+/*
+	Returns the power set of the set held in the array.
+	Optionally doesn't return the empty set.
+*/
+App.powerset = function (ary) {
+    var ps = [[]];
+    for (var i=0; i < ary.length; i++) {
+        for (var j = 0, len = ps.length; j < len; j++) {
+            ps.push(ps[j].concat(ary[i]));
+        }
+    }
+    return ps;
+}
+
 App.init = function () {
 
 	// Setup the equivalence rule view
@@ -78,8 +93,8 @@ App.init = function () {
 
 			$mainAppRow.height(newMainAppHeight);
 
-			App.inputSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 40)/2);
-			App.goalSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 40)/2);
+			App.inputSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 53)/2);
+			App.goalSetTreeVis.resizeSvg($treeVisView.width(), (newMainAppHeight - 53)/2);
 			
 		};
 		

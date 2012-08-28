@@ -4,7 +4,8 @@ App.EquivalenceRule = Backbone.Model.extend({
 	defaults: {
 		active: false,
 		freeVarCheck: false,
-		isCurApplicable : false
+		isCurApplicable : false,
+		forEqGen : true
 	},
 
 	url : "api/eqRule",
@@ -34,6 +35,10 @@ App.EquivalenceRule = Backbone.Model.extend({
 
 		if (this.get("probabilities") === undefined) {
 			this.set("probabilities", [0.8,0.8]);
+		}
+
+		if (this.get("forEqGen") === undefined) {
+			this.set("forEqGen", false);
 		}
 	},
 
@@ -112,7 +117,6 @@ App.EquivalenceRule = Backbone.Model.extend({
 	isApplicable : function (direction, formula) {
 		var i, trees = (direction < 0 ? this.get("rhsTrees") : this.get("lhsTrees")),
 			noTrees = trees.length,
-			applicable = false,
 			matchingPairs;
 
 		for (i = 0; i < noTrees; i++) {
@@ -563,8 +567,8 @@ App.EquivalenceRule = Backbone.Model.extend({
 				eqRule = App.equivalenceRules.at(iEq);
 				matchingPairs = eqRule.isApplicable(1, oldWffSubs[i]);
 
-				if (matchingPairs) { // If the rule is applicable forwards
-					if (eqRule.get("fwdIntroSymbols").quantifiers.length + eqRule.get("fwdIntroSymbols").symbols.length > 0) { // i.e the fwd application requires introduction
+				if (matchingPairs) { // If the rule is applicable forwards to the current oldWff SubF
+					if (eqRule.get("fwdIntroSymbols").quantifiers.length + eqRule.get("fwdIntroSymbols").symbols.length > 0) { // the fwd application needs intro
 						for (j = 0; j < newWffSubsLength; j++) { // For all the newWff subFs
 							introMatchingPairs = eqRule.isApplicable(-1, newWffSubs[j]);
 							if (introMatchingPairs) { // If the eqRule is applicable backwards to the newWff subF
@@ -1537,6 +1541,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 		rule: "A → A ≡ ⊤",
 		bidirectional: true,
 		probabilities : [0.9, 0.3],
+		forEqGen : false,
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1556,6 +1561,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 		rule: "⊤ → A ≡ A",
 		bidirectional: true,
 		probabilities : [0.9, 0],
+		forEqGen : false,
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -1574,6 +1580,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "A → ⊤ ≡ ⊤",
 		bidirectional: true,
+		forEqGen : false,
 		probabilities : [0.9, 0.3],
 		category: "Equivalences involving →",
 
@@ -1591,6 +1598,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 	}, {
 		rule: "⊥ → A ≡ ⊤",
 		bidirectional: true,
+		forEqGen : false,
 		probabilities : [0.9, 0.3],
 		category: "Equivalences involving →",
 
@@ -1609,6 +1617,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 		rule: "A → ⊥ ≡ ¬A",
 		bidirectional: true,
 		probabilities : [0.9, 0.3],
+		forEqGen : false,
 		category: "Equivalences involving →",
 
 		lhsTrees: [
@@ -3074,7 +3083,7 @@ App.equivalenceRules = new App.EquivalenceRules([
 			})
 		})]
 	}, {
-		rule: "∀X(A → B) ≡ A → ∃∀(B)",
+		rule: "∀X(A → B) ≡ A → ∀X(B)",
 		bidirectional: true,
 		probabilities : [0.7, 0.7],
 		freeVarCheck : [["X", "A"]], // This means X cannot occur free in A
